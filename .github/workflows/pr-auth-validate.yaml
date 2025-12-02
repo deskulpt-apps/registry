@@ -6,6 +6,12 @@ on:
       - "publishers/*.yaml"
       - "widgets/*.yaml"
 
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+  PUBLISH_PLAN_PATH: "publish-plan.ndjson"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -21,8 +27,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.base.sha }} || true
-          git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.head.sha }} || true
+          git fetch --no-tags --depth=1 origin "$BASE_SHA" || true
+          git fetch --no-tags --depth=1 origin "$HEAD_SHA" || true
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -51,50 +57,36 @@ jobs:
         uses: oras-project/setup-oras@v1
 
       - name: Find changed files and handles
-        id: diff
         shell: bash
         run: |
           set -euo pipefail
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           DIFF_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -E '^(publishers|widgets)/.*\.yaml$' || true)
           if [ -z "$DIFF_FILES" ]; then
             echo "No matching files changed."
-            echo "CHANGED_HANDLES=" >> $GITHUB_OUTPUT
+            echo "CHANGED_HANDLES=" >> $GITHUB_ENV
             exit 0
           fi
           CHANGED_HANDLES=$(echo "$DIFF_FILES" | xargs -n 1 basename -s .yaml | sort -u | xargs)
-          echo "CHANGED_HANDLES=$CHANGED_HANDLES" >> $GITHUB_OUTPUT
+          echo "CHANGED_HANDLES=$CHANGED_HANDLES" >> $GITHUB_ENV
 
       - name: Authorize
-        if: ${{ steps.diff.outputs.CHANGED_HANDLES != '' }}
+        if: ${{ env.CHANGED_HANDLES != '' }}
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
           AUTHOR_ID: ${{ github.event.pull_request.user.id }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          CHANGED_HANDLES: ${{ steps.diff.outputs.CHANGED_HANDLES }}
         run: pnpm authz
 
       - name: Validate changes
-        if: ${{ steps.diff.outputs.CHANGED_HANDLES != '' }}
+        if: ${{ env.CHANGED_HANDLES != '' }}
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          CHANGED_HANDLES: ${{ steps.diff.outputs.CHANGED_HANDLES }}
-          PUBLISH_PLAN_PATH: ".publish-plan.ndjson"
           LICENSE_DETECTION_SCRIPT: |
             licensee detect "$1" --json | jq -r '[.licenses[].spdx_id] | unique | join(" ")'
         run: pnpm validate-changes
 
       - name: Display publish plan
-        if: ${{ steps.diff.outputs.CHANGED_HANDLES != '' }}
+        if: ${{ env.CHANGED_HANDLES != '' }}
         shell: bash
-        env:
-          PUBLISH_PLAN_PATH: ".publish-plan.ndjson"
         run: |
           test -s "$PUBLISH_PLAN_PATH" && cat "$PUBLISH_PLAN_PATH" || echo "No publish plan."

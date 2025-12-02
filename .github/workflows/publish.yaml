@@ -8,6 +8,11 @@ on:
       - "publishers/*.yaml"
       - "widgets/*.yaml"
 
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+  HEAD_SHA: ${{ github.sha }}
+  PUBLISH_PLAN_PATH: "publish-plan.ndjson"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -20,13 +25,20 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      - name: Ensure base and head are fetched
+      - name: Read registry checkpoint
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin ${{ github.event.before }} || true
-          git fetch --no-tags --depth=1 origin ${{ github.sha }} || true
+          REGISTRY_DIR="$RUNNER_TEMP/registry-wt"
+          git fetch origin registry:refs/remotes/origin/registry --depth=1
+          git worktree add "$REGISTRY_DIR" origin/registry
+          REGISTRY_CHECKPOINT=$(cat "$REGISTRY_DIR/.checkpoint" | tr -d '\r\n')
+          BASE_SHA=$(git merge-base "$REGISTRY_CHECKPOINT" "$HEAD_SHA")
+          echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
+          git worktree remove -f "$REGISTRY_DIR" || true
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -55,31 +67,23 @@ jobs:
         uses: oras-project/setup-oras@v1
 
       - name: Find changed files and handles
-        id: diff
         shell: bash
         run: |
           set -euo pipefail
-          BASE_SHA="${{ github.event.before }}"
-          HEAD_SHA="${{ github.sha }}"
           DIFF_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -E '^(publishers|widgets)/.*\.yaml$' || true)
           if [ -z "$DIFF_FILES" ]; then
             echo "No matching files changed."
-            echo "CHANGED_HANDLES=" >> $GITHUB_OUTPUT
+            echo "CHANGED_HANDLES=" >> $GITHUB_ENV
             exit 0
           fi
           CHANGED_HANDLES=$(echo "$DIFF_FILES" | xargs -n 1 basename -s .yaml | sort -u | xargs)
-          echo "CHANGED_HANDLES=$CHANGED_HANDLES" >> $GITHUB_OUTPUT
+          echo "CHANGED_HANDLES=$CHANGED_HANDLES" >> $GITHUB_ENV
 
       - name: Validate changes
-        if: ${{ steps.diff.outputs.CHANGED_HANDLES != '' }}
+        if: ${{ env.CHANGED_HANDLES != '' }}
         id: validate-changes
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          BASE_SHA: ${{ github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
-          CHANGED_HANDLES: ${{ steps.diff.outputs.CHANGED_HANDLES }}
-          PUBLISH_PLAN_PATH: ".publish-plan.ndjson"
           LICENSE_DETECTION_SCRIPT: |
             licensee detect "$1" --json | jq -r '[.licenses[].spdx_id] | unique | join(" ")'
         run: |
@@ -95,7 +99,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: publish-plan
-          path: .publish-plan.ndjson
+          path: ${{ env.PUBLISH_PLAN_PATH }}
           if-no-files-found: error
 
   publish:
@@ -129,7 +133,7 @@ jobs:
       - name: Login to GHCR
         shell: bash
         run: |
-          echo "${{ github.token }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "$GITHUB_TOKEN" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Download publish plan
         uses: actions/download-artifact@v6
@@ -138,32 +142,28 @@ jobs:
           path: .
 
       - name: Prepare registry worktree
-        id: prepare-registry-worktree
         shell: bash
         run: |
           set -euo pipefail
           REGISTRY_DIR="$RUNNER_TEMP/registry-wt"
           git fetch origin registry:refs/remotes/origin/registry --depth=1
           git worktree add "$REGISTRY_DIR" origin/registry
-          echo "REGISTRY_DIR=$REGISTRY_DIR" >> $GITHUB_OUTPUT
+          echo "REGISTRY_DIR=$REGISTRY_DIR" >> $GITHUB_ENV
 
       - name: Publish to GHCR and update registry
         shell: bash
         env:
-          GHCR_REPO_PREFIX: ghcr.io/${{ github.repository_owner }}/widgets
-          PUBLISH_PLAN_PATH: .publish-plan.ndjson
-          REGISTRY_DIR: ${{ steps.prepare-registry-worktree.outputs.REGISTRY_DIR }}
+          GHCR_REPO_PREFIX: ghcr.io/${{ github.repository }}
         run: pnpm publish-changes
 
       - name: Publish registry updates
         shell: bash
-        env:
-          REGISTRY_DIR: ${{ steps.prepare-registry-worktree.outputs.REGISTRY_DIR }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           cd "$REGISTRY_DIR"
+          echo "$HEAD_SHA" > .checkpoint
           git add -A
-          git commit -m "publish: ${{ github.sha }}"
+          git commit -m "publish: $HEAD_SHA"
           git push origin HEAD:registry

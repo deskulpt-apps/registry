@@ -57,7 +57,7 @@ function extractSpdx(spdx: string) {
   const visit = (node: spdxParse.Info) => {
     if (nodeIsLicenseInfo(node)) {
       const spdxId = node.plus ? `${node.license}+` : node.license;
-      if (!ACCEPTED_LICENSES.includes(spdxId)) {
+      if (ACCEPTED_LICENSES.includes(spdxId)) {
         spdxIds.add(spdxId);
       }
     } else if (nodeIsConjunctionInfo(node)) {
