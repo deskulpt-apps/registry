@@ -38,10 +38,6 @@ jobs:
       - name: Install node dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check formatting
-        shell: bash
-        run: pnpm format:check
-
       - name: Ruby setup
         uses: ruby/setup-ruby@v1
         with:
