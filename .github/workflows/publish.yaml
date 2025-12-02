@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "publishers/*.yaml"
-      - "widgets/*.yaml"
 
 env:
   GITHUB_TOKEN: ${{ github.token }}
@@ -80,7 +77,6 @@ jobs:
           echo "CHANGED_HANDLES=$CHANGED_HANDLES" >> $GITHUB_ENV
 
       - name: Validate changes
-        if: ${{ env.CHANGED_HANDLES != '' }}
         id: validate-changes
         shell: bash
         env:

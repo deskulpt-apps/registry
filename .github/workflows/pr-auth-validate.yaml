@@ -70,7 +70,6 @@ jobs:
           echo "CHANGED_HANDLES=$CHANGED_HANDLES" >> $GITHUB_ENV
 
       - name: Authorize
-        if: ${{ env.CHANGED_HANDLES != '' }}
         shell: bash
         env:
           AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
@@ -78,7 +77,6 @@ jobs:
         run: pnpm authz
 
       - name: Validate changes
-        if: ${{ env.CHANGED_HANDLES != '' }}
         shell: bash
         env:
           LICENSE_DETECTION_SCRIPT: |
@@ -86,7 +84,6 @@ jobs:
         run: pnpm validate-changes
 
       - name: Display publish plan
-        if: ${{ env.CHANGED_HANDLES != '' }}
         shell: bash
         run: |
-          test -s "$PUBLISH_PLAN_PATH" && cat "$PUBLISH_PLAN_PATH" || echo "No publish plan."
+          [ -s "$PUBLISH_PLAN_PATH" ] && cat "$PUBLISH_PLAN_PATH" || echo "No publish plan."
