@@ -7,7 +7,7 @@ on:
       - "widgets/*.yaml"
 
 env:
-  GITHUB_TOKEN: ${{ github.token }}
+  GH_TOKEN: ${{ github.token }}
   BASE_SHA: ${{ github.event.pull_request.base.sha }}
   HEAD_SHA: ${{ github.event.pull_request.head.sha }}
   PUBLISH_PLAN_PATH: "publish-plan.ndjson"

@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  GITHUB_TOKEN: ${{ github.token }}
+  GH_TOKEN: ${{ github.token }}
   HEAD_SHA: ${{ github.sha }}
   PUBLISH_PLAN_PATH: "publish-plan.ndjson"
 
@@ -129,7 +129,7 @@ jobs:
       - name: Login to GHCR
         shell: bash
         run: |
-          echo "$GITHUB_TOKEN" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "$GH_TOKEN" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Download publish plan
         uses: actions/download-artifact@v6
@@ -156,6 +156,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          gh auth setup-git
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           cd "$REGISTRY_DIR"

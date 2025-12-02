@@ -2,12 +2,12 @@ import { Octokit } from "octokit";
 
 const GITHUB_API_VERSION = "2022-11-28";
 
-const GITHUB_TOKEN = process.env["GITHUB_TOKEN"];
-if (GITHUB_TOKEN === undefined) {
-  console.warn("Missing environment variable: GITHUB_TOKEN");
+const GH_TOKEN = process.env["GH_TOKEN"];
+if (GH_TOKEN === undefined) {
+  console.warn("Missing environment variable: GH_TOKEN");
 }
 
-const octokit = new Octokit({ auth: GITHUB_TOKEN });
+const octokit = new Octokit({ auth: GH_TOKEN });
 
 export async function isOrgMember(params: {
   orgId: number;
