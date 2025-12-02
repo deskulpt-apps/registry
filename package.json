@@ -1,0 +1,39 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "preinstall": "npx only-allow pnpm",
+    "prepare": "husky",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "authz": "oxnode scripts/authz.ts",
+    "validate-changes": "oxnode scripts/validate-changes.ts",
+    "publish-changes": "oxnode scripts/publish-changes.ts"
+  },
+  "dependencies": {
+    "fast-deep-equal": "^3.1.3",
+    "octokit": "^5.0.5",
+    "semver": "^7.7.3",
+    "spdx-expression-parse": "^4.0.0",
+    "spdx-satisfies": "^6.0.0",
+    "yaml": "^2.8.2",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@oxc-node/cli": "^0.0.34",
+    "@tsconfig/node-lts": "^24.0.0",
+    "@tsconfig/strictest": "^2.0.8",
+    "@types/node": "^24.10.1",
+    "@types/semver": "^7.7.1",
+    "@types/spdx-expression-parse": "^3.0.5",
+    "@types/spdx-satisfies": "^6.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.3",
+    "typescript": "^5.9.3"
+  },
+  "prettier": {},
+  "lint-staged": {
+    "*.{ts,json,yaml}": "prettier --write"
+  }
+}
