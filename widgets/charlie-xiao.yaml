@@ -1,5 +1,5 @@
 example-digital-clock:
   version: 0.1.0-alpha.1
   repo: https://github.com/Charlie-XIAO/deskulpt-widgets.git
-  commit: fba245a0a8c776437201b323c13b93956ab2e007
+  commit: eac361dff70da93d573cd28f041aa15ca5d8a123
   path: example-digital-clock
