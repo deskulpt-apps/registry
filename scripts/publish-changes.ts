@@ -87,7 +87,7 @@ for (const it of registryUpdatePlan) {
       handle,
       id,
       name: manifest.name,
-      authors: JSON.stringify(manifest.authors),
+      authors: manifest.authors,
       description: manifest.description,
       releases: [releaseData],
     };
@@ -99,7 +99,7 @@ for (const it of registryUpdatePlan) {
   }
 
   entry.name = manifest.name;
-  entry.authors = JSON.stringify(manifest.authors);
+  entry.authors = manifest.authors;
   entry.description = manifest.description;
   entry.releases.unshift(releaseData); // Prepend new release
   console.log(`::group::[${handle}/${id}] Updated entry`);

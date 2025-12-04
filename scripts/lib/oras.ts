@@ -20,8 +20,7 @@ export async function push({
   const standardAnnotations = {
     created: undefined, // This will be filled by oras
     authors: JSON.stringify(manifest.authors),
-    url: undefined, // TODO: when we have this in manifest
-    documentation: undefined, // TODO: when we have this in manifest
+    url: manifest.homepage,
     source: `${widget.repo}@${widget.commit}`,
     version: widget.version,
     revision: widget.commit,

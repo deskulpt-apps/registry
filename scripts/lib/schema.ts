@@ -32,25 +32,24 @@ const WidgetSchema = z.object({
 
 const WidgetsSchema = z.record(z.string().regex(SAFE_ID_REGEX), WidgetSchema);
 
+const WidgetManifestAuthorSchema = z.union([
+  z.string(),
+  z.object({
+    name: z.string(),
+    email: z.email().optional(),
+    url: z.url().optional(),
+  }),
+]);
+
 // Widget manifest schema deskulpt.widget.json, but only keeping the fields we
 // care about with stricter validation for widgets to be published
 const WidgetManifestSchema = z.object({
-  name: z.string(),
+  name: z.string().max(80),
   version: z.string().regex(SEMVER_REGEX),
-  authors: z
-    .array(
-      z.union([
-        z.string(),
-        z.object({
-          name: z.string(),
-          email: z.email().optional(),
-          url: z.url().optional(),
-        }),
-      ]),
-    )
-    .min(1),
+  authors: z.array(WidgetManifestAuthorSchema).min(1),
   license: z.string(),
   description: z.string().max(160),
+  homepage: z.url(),
 });
 
 const PublishPlanEntrySchema = z.object({
@@ -80,7 +79,7 @@ const OrasPushOutputSchema = z.object({
 
 const RegistryEntryReleaseSchema = z.object({
   version: z.string(),
-  publishedAt: z.string(),
+  publishedAt: z.iso.datetime(),
   digest: z.string(),
 });
 
@@ -88,14 +87,14 @@ const RegistryEntrySchema = z.object({
   handle: z.string(),
   id: z.string(),
   name: z.string(),
-  authors: z.string(), // JSON-stringified array of authors
+  authors: z.array(WidgetManifestAuthorSchema).min(1),
   description: z.string(),
   releases: z.array(RegistryEntryReleaseSchema).min(1),
 });
 
 const RegistryIndexSchema = z.object({
   api: z.int(),
-  generatedAt: z.string(),
+  generatedAt: z.iso.datetime(),
   widgets: z.array(RegistryEntrySchema),
 });
 
