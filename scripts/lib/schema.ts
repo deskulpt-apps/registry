@@ -89,6 +89,7 @@ const RegistryEntrySchema = z.object({
   name: z.string(),
   authors: z.array(WidgetManifestAuthorSchema).min(1),
   description: z.string(),
+  homepage: z.url(),
   releases: z.array(RegistryEntryReleaseSchema).min(1),
 });
 
