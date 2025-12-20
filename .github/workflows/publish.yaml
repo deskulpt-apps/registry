@@ -92,7 +92,7 @@ jobs:
 
       - name: Upload publish plan
         if: ${{ steps.validate-changes.outputs.HAS_PUBLISH_PLAN == '1' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: publish-plan
           path: ${{ env.PUBLISH_PLAN_PATH }}
@@ -132,7 +132,7 @@ jobs:
           echo "$GH_TOKEN" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Download publish plan
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: publish-plan
           path: .
