@@ -8,7 +8,7 @@ import * as git from "./git.ts";
 export const SEMVER_REGEX =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
 
-export const SAFE_ID_REGEX = /^[a-zA-Z0-9-_]+$/;
+export const SAFE_IDENTIFIER_REGEX = /^[a-zA-Z0-9-_]+$/;
 
 const PublisherSchema = z
   .object({
@@ -30,7 +30,10 @@ const WidgetSchema = z.object({
   path: z.string().optional(),
 });
 
-const WidgetsSchema = z.record(z.string().regex(SAFE_ID_REGEX), WidgetSchema);
+const WidgetsSchema = z.record(
+  z.string().regex(SAFE_IDENTIFIER_REGEX),
+  WidgetSchema,
+);
 
 const WidgetManifestAuthorSchema = z.union([
   z.string(),
@@ -53,8 +56,8 @@ const WidgetManifestSchema = z.object({
 });
 
 const PublishPlanEntrySchema = z.object({
-  handle: z.string(),
-  id: z.string(),
+  publisher: z.string(),
+  slug: z.string(),
   widget: WidgetSchema,
   manifest: WidgetManifestSchema,
 });
@@ -84,8 +87,8 @@ const RegistryEntryReleaseSchema = z.object({
 });
 
 const RegistryEntrySchema = z.object({
-  handle: z.string(),
-  id: z.string(),
+  publisher: z.string(),
+  slug: z.string(),
   name: z.string(),
   authors: z.array(WidgetManifestAuthorSchema).min(1),
   description: z.string(),
@@ -93,7 +96,7 @@ const RegistryEntrySchema = z.object({
 });
 
 const RegistryIndexSchema = z.object({
-  api: z.int(),
+  api: z.string(),
   generatedAt: z.iso.datetime(),
   widgets: z.array(RegistryEntrySchema),
 });
