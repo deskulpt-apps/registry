@@ -56,18 +56,18 @@ jobs:
       - name: Install oras
         uses: oras-project/setup-oras@v1
 
-      - name: Find changed files and handles
+      - name: Find changed files and publishers
         shell: bash
         run: |
           set -euo pipefail
           DIFF_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -E '^(publishers|widgets)/.*\.yaml$' || true)
           if [ -z "$DIFF_FILES" ]; then
             echo "No matching files changed."
-            echo "CHANGED_HANDLES=" >> $GITHUB_ENV
+            echo "CHANGED_PUBLISHERS=" >> $GITHUB_ENV
             exit 0
           fi
-          CHANGED_HANDLES=$(echo "$DIFF_FILES" | xargs -n 1 basename -s .yaml | sort -u | xargs)
-          echo "CHANGED_HANDLES=$CHANGED_HANDLES" >> $GITHUB_ENV
+          CHANGED_PUBLISHERS=$(echo "$DIFF_FILES" | xargs -n 1 basename -s .yaml | sort -u | xargs)
+          echo "CHANGED_PUBLISHERS=$CHANGED_PUBLISHERS" >> $GITHUB_ENV
 
       - name: Authorize
         shell: bash

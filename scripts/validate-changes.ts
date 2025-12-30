@@ -11,14 +11,14 @@ import { exec } from "./lib/process.ts";
 import {
   parseWidgetManifest,
   parseWidgets,
-  SAFE_ID_REGEX,
+  SAFE_IDENTIFIER_REGEX,
   PublishPlanEntry,
 } from "./lib/schema.ts";
 
 for (const varName of [
   "BASE_SHA",
   "HEAD_SHA",
-  "CHANGED_HANDLES",
+  "CHANGED_PUBLISHERS",
   "PUBLISH_PLAN_PATH",
 ]) {
   if (process.env[varName] === undefined) {
@@ -28,13 +28,15 @@ for (const varName of [
 
 const BASE_SHA = process.env["BASE_SHA"]!;
 const HEAD_SHA = process.env["HEAD_SHA"]!;
-const CHANGED_HANDLES = process.env["CHANGED_HANDLES"]!;
+const CHANGED_PUBLISHERS = process.env["CHANGED_PUBLISHERS"]!;
 const PUBLISH_PLAN_PATH = process.env["PUBLISH_PLAN_PATH"]!;
 const LICENSE_DETECTION_SCRIPT = process.env["LICENSE_DETECTION_SCRIPT"];
 
-const changedHandles = CHANGED_HANDLES.trim().split(/\s+/).filter(Boolean);
-if (changedHandles.length === 0) {
-  console.log("No handles provided, skipping validation");
+const changedPublishers = CHANGED_PUBLISHERS.trim()
+  .split(/\s+/)
+  .filter(Boolean);
+if (changedPublishers.length === 0) {
+  console.log("No publishers provided, skipping validation");
   process.exit(0);
 }
 
@@ -74,34 +76,34 @@ const TEMP_DIR = path.resolve("temp");
 
 const publishPlan = await fs.open(PUBLISH_PLAN_PATH, "w");
 
-for (const handle of changedHandles) {
-  console.log(`[${handle}] Validating widgets...`);
+for (const publisher of changedPublishers) {
+  console.log(`[${publisher}] Validating widgets...`);
 
-  if (!SAFE_ID_REGEX.test(handle)) {
+  if (!SAFE_IDENTIFIER_REGEX.test(publisher)) {
     die(
-      `[${handle}] Invalid publisher handle; expected to match ${SAFE_ID_REGEX}`,
+      `[${publisher}] Invalid publisher identifier; expected to match ${SAFE_IDENTIFIER_REGEX}`,
     );
   }
 
-  const baseWidgets = (await parseWidgets(handle, BASE_SHA)) ?? {};
-  const headWidgets = (await parseWidgets(handle, HEAD_SHA)) ?? {};
+  const baseWidgets = (await parseWidgets(publisher, BASE_SHA)) ?? {};
+  const headWidgets = (await parseWidgets(publisher, HEAD_SHA)) ?? {};
 
-  for (const id of Object.keys(baseWidgets)) {
-    if (!(id in headWidgets)) {
-      die(`[${handle}/${id}] Published widget cannot be deleted`);
+  for (const slug of Object.keys(baseWidgets)) {
+    if (!(slug in headWidgets)) {
+      die(`[${publisher}/${slug}] Published widget cannot be deleted`);
     }
   }
 
-  for (const [id, widget] of Object.entries(headWidgets)) {
-    const baseWidget = baseWidgets[id];
+  for (const [slug, widget] of Object.entries(headWidgets)) {
+    const baseWidget = baseWidgets[slug];
     if (baseWidget === undefined) {
-      console.log(`[${handle}/${id}] Validating new widget...`);
+      console.log(`[${publisher}/${slug}] Validating new widget...`);
     } else {
       if (deepEqual(baseWidget, widget)) {
-        console.log(`[${handle}/${id}] Skipping unchanged widget`);
+        console.log(`[${publisher}/${slug}] Skipping unchanged widget`);
         continue;
       }
-      console.log(`[${handle}/${id}] Validating updated widget...`);
+      console.log(`[${publisher}/${slug}] Validating updated widget...`);
     }
 
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
@@ -118,13 +120,13 @@ for (const handle of changedHandles) {
 
     if (semver.valid(widget.version) === null) {
       die(
-        `[${handle}/${id}] Widget version is not valid semver: ${widget.version}`,
+        `[${publisher}/${slug}] Widget version is not valid semver: ${widget.version}`,
       );
     }
 
     if (manifest.version !== widget.version) {
       die(
-        `[${handle}/${id}] Widget version mismatch: ${manifest.version} (manifest) vs. ${widget.version} (declared)`,
+        `[${publisher}/${slug}] Widget version mismatch: ${manifest.version} (manifest) vs. ${widget.version} (declared)`,
       );
     }
 
@@ -133,13 +135,13 @@ for (const handle of changedHandles) {
       semver.gte(baseWidget.version, widget.version)
     ) {
       die(
-        `[${handle}/${id}] Updating an existing widget must increment its version: ${baseWidget.version} -> ${widget.version}`,
+        `[${publisher}/${slug}] Updating an existing widget must increment its version: ${baseWidget.version} -> ${widget.version}`,
       );
     }
 
     if (!spdxSatisfies(manifest.license, ACCEPTED_LICENSES)) {
       die(
-        `[${handle}/${id}] License "${manifest.license}" not accepted; accepted licenses: ${ACCEPTED_LICENSES.join(", ")}`,
+        `[${publisher}/${slug}] License "${manifest.license}" not accepted; accepted licenses: ${ACCEPTED_LICENSES.join(", ")}`,
       );
     }
 
@@ -159,15 +161,17 @@ for (const handle of changedHandles) {
       for (const spdxId of spdxIds) {
         if (!detectedLicenses.includes(spdxId)) {
           die(
-            `[${handle}/${id}] License "${spdxId}" declared but not detected in the widget source; detected licenses are: ${detectedLicenses.join(", ")}`,
+            `[${publisher}/${slug}] License "${spdxId}" declared but not detected in the widget source; detected licenses are: ${detectedLicenses.join(", ")}`,
           );
         }
       }
     }
 
-    console.log(`[${handle}/${id}] Validation passed`);
+    console.log(`[${publisher}/${slug}] Validation passed`);
 
-    console.log(`::group::[${handle}/${id}] Packaging widget (dry run)...`);
+    console.log(
+      `::group::[${publisher}/${slug}] Packaging widget (dry run)...`,
+    );
     const pushResult = await oras.push({
       src: widgetDir,
       dst: path.join(TEMP_DIR, "dist"),
@@ -178,8 +182,8 @@ for (const handle of changedHandles) {
     console.log(pushResult);
     console.log(`::endgroup::`);
 
-    console.log(`::group::[${handle}/${id}] Writing plan...`);
-    const planEntry: PublishPlanEntry = { handle, id, widget, manifest };
+    console.log(`::group::[${publisher}/${slug}] Writing plan...`);
+    const planEntry: PublishPlanEntry = { publisher, slug, widget, manifest };
     await publishPlan.write(JSON.stringify(planEntry) + "\n");
     console.log(planEntry);
     console.log(`::endgroup::`);

@@ -8,7 +8,7 @@ for (const varName of [
   "AUTHOR_ID",
   "BASE_SHA",
   "HEAD_SHA",
-  "CHANGED_HANDLES",
+  "CHANGED_PUBLISHERS",
 ]) {
   if (process.env[varName] === undefined) {
     die(`Missing required environment variable: ${varName}`);
@@ -19,11 +19,13 @@ const AUTHOR_LOGIN = process.env["AUTHOR_LOGIN"]!;
 const AUTHOR_ID = process.env["AUTHOR_ID"]!;
 const BASE_SHA = process.env["BASE_SHA"]!;
 const HEAD_SHA = process.env["HEAD_SHA"]!;
-const CHANGED_HANDLES = process.env["CHANGED_HANDLES"]!;
+const CHANGED_PUBLISHERS = process.env["CHANGED_PUBLISHERS"]!;
 
-const changedHandles = CHANGED_HANDLES.trim().split(/\s+/).filter(Boolean);
-if (changedHandles.length === 0) {
-  console.log("No handles provided, skipping authorization check");
+const changedPublishers = CHANGED_PUBLISHERS.trim()
+  .split(/\s+/)
+  .filter(Boolean);
+if (changedPublishers.length === 0) {
+  console.log("No publishers provided, skipping authorization check");
   process.exit(0);
 }
 
@@ -40,42 +42,44 @@ async function authorizedByOwnerOrOrg({ user, organization }: Publisher) {
   return undefined;
 }
 
-for (const handle of changedHandles) {
-  console.log(`[${handle}] Authorizing...`);
+for (const publisher of changedPublishers) {
+  console.log(`[${publisher}] Authorizing...`);
 
-  const basePublisher = await parsePublisher(handle, BASE_SHA);
-  const headPublisher = await parsePublisher(handle, HEAD_SHA);
+  const basePublisher = await parsePublisher(publisher, BASE_SHA);
+  const headPublisher = await parsePublisher(publisher, HEAD_SHA);
 
   if (headPublisher === undefined) {
     if (basePublisher === undefined) {
       console.log(
-        `[${handle}] Publisher does not exist on BASE or HEAD, skipping`,
+        `[${publisher}] Publisher does not exist on BASE or HEAD, skipping`,
       );
       continue;
     } else {
-      die(`[${handle}] Existing publisher cannot be removed`);
+      die(`[${publisher}] Existing publisher cannot be removed`);
     }
   }
 
   if (basePublisher === undefined) {
     const authRole = await authorizedByOwnerOrOrg(headPublisher);
     if (authRole !== undefined) {
-      console.log(`[${handle}] Authorized as ${authRole} publisher (new)`);
+      console.log(`[${publisher}] Authorized as ${authRole} publisher (new)`);
       continue;
     }
-    die(`[${handle}] Unauthorized`);
+    die(`[${publisher}] Unauthorized`);
   }
 
   if (
     basePublisher.user !== headPublisher.user ||
     basePublisher.organization !== headPublisher.organization
   ) {
-    die(`[${handle}] Identity of existing publisher cannot be changed`);
+    die(`[${publisher}] Identity of existing publisher cannot be changed`);
   }
 
   const authRole = await authorizedByOwnerOrOrg(headPublisher);
   if (authRole !== undefined) {
-    console.log(`[${handle}] Authorized as ${authRole} publisher (existing)`);
+    console.log(
+      `[${publisher}] Authorized as ${authRole} publisher (existing)`,
+    );
     continue;
   }
 
@@ -83,14 +87,14 @@ for (const handle of changedHandles) {
   const headExtraMaintainers = headPublisher.extraMaintainers?.sort() ?? [];
   if (!deepEqual(baseExtraMaintainers, headExtraMaintainers)) {
     die(
-      `[${handle}] Only user publisher themselves or member of organization publisher can change the list of extra maintainers`,
+      `[${publisher}] Only the publisher owner or an authorized organization member can modify extra maintainers`,
     );
   }
 
   if (baseExtraMaintainers.map(String).includes(AUTHOR_ID)) {
-    console.log(`[${handle}] Authorized as extra maintainer`);
+    console.log(`[${publisher}] Authorized as extra maintainer`);
     continue;
   }
 
-  die(`[${handle}] Unauthorized`);
+  die(`[${publisher}] Unauthorized`);
 }

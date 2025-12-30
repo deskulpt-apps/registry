@@ -13,6 +13,7 @@ for (const varName of [
   "GHCR_REPO_PREFIX",
   "PUBLISH_PLAN_PATH",
   "REGISTRY_DIR",
+  "API_VERSION",
 ]) {
   if (process.env[varName] === undefined) {
     die(`Missing required environment variable: ${varName}`);
@@ -22,6 +23,7 @@ for (const varName of [
 const GHCR_REPO_PREFIX = process.env["GHCR_REPO_PREFIX"]!;
 const PUBLISH_PLAN_PATH = process.env["PUBLISH_PLAN_PATH"]!;
 const REGISTRY_DIR = process.env["REGISTRY_DIR"]!;
+const API_VERSION = process.env["API_VERSION"]!;
 
 const TEMP_DIR = path.resolve("temp");
 
@@ -29,7 +31,7 @@ const publishPlan = await parsePublishPlan(PUBLISH_PLAN_PATH);
 const registryUpdatePlan = [];
 
 for (const it of publishPlan) {
-  const { handle, id, widget, manifest } = it;
+  const { publisher, slug, widget, manifest } = it;
   await fs.rm(TEMP_DIR, { recursive: true, force: true });
   await git.checkoutRepoAtCommit(
     TEMP_DIR,
@@ -38,10 +40,10 @@ for (const it of publishPlan) {
     widget.path,
   );
 
-  console.log(`::group::[${handle}/${id}] Publishing widget...`);
+  console.log(`::group::[${publisher}/${slug}] Publishing widget...`);
   const widgetDir =
     widget.path === undefined ? TEMP_DIR : path.join(TEMP_DIR, widget.path);
-  const remote = `${GHCR_REPO_PREFIX}/${handle}/${id}`;
+  const remote = `${GHCR_REPO_PREFIX}/${publisher}/${slug}`;
   const pushResult = await oras.push({
     src: widgetDir,
     dst: remote,
@@ -65,15 +67,15 @@ for (const it of publishPlan) {
 const now = new Date();
 await fs.mkdir(REGISTRY_DIR, { recursive: true });
 const registryIndex = await parseRegistryIndex(REGISTRY_DIR);
-registryIndex.api = 1;
+registryIndex.api = API_VERSION;
 registryIndex.generatedAt = now.toISOString();
 
 console.log("Updating registry index...");
 
 for (const it of registryUpdatePlan) {
-  const { handle, id, widget, manifest, publishedAt, digest } = it;
+  const { publisher, slug, widget, manifest, publishedAt, digest } = it;
   let entry = registryIndex.widgets.find(
-    (e) => e.handle === handle && e.id === id,
+    (e) => e.publisher === publisher && e.slug === slug,
   );
 
   const releaseData = {
@@ -84,15 +86,15 @@ for (const it of registryUpdatePlan) {
 
   if (entry === undefined) {
     entry = {
-      handle,
-      id,
+      publisher,
+      slug,
       name: manifest.name,
       authors: manifest.authors,
       description: manifest.description,
       releases: [releaseData],
     };
     registryIndex.widgets.push(entry);
-    console.log(`::group::[${handle}/${id}] Added new entry`);
+    console.log(`::group::[${publisher}/${slug}] Added new entry`);
     console.log(entry);
     console.log("::endgroup::");
     continue;
@@ -102,16 +104,16 @@ for (const it of registryUpdatePlan) {
   entry.authors = manifest.authors;
   entry.description = manifest.description;
   entry.releases.unshift(releaseData); // Prepend new release
-  console.log(`::group::[${handle}/${id}] Updated entry`);
+  console.log(`::group::[${publisher}/${slug}] Updated entry`);
   console.log(entry);
   console.log("::endgroup::");
 }
 
 registryIndex.widgets.sort((a, b) => {
-  if (a.handle !== b.handle) {
-    return a.handle.localeCompare(b.handle);
+  if (a.publisher !== b.publisher) {
+    return a.publisher.localeCompare(b.publisher);
   }
-  return a.id.localeCompare(b.id);
+  return a.slug.localeCompare(b.slug);
 });
 
 await writeRegistryIndex(REGISTRY_DIR, registryIndex);
