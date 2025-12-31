@@ -1,6 +1,7 @@
 {
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.25.0",
   "scripts": {
     "preinstall": "npx only-allow pnpm",
     "prepare": "husky",
@@ -34,6 +35,6 @@
   },
   "prettier": {},
   "lint-staged": {
-    "*.{ts,json,yaml}": "prettier --write"
+    "*.{js,ts,json,yml,yaml,md}": "prettier --write"
   }
 }

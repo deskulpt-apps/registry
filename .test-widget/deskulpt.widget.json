@@ -1,0 +1,8 @@
+{
+  "name": "Test Widget",
+  "version": "0.1.0",
+  "authors": ["The Deskulpt Development Team"],
+  "license": "MIT",
+  "description": "For testing the Deskulpt registry.",
+  "entry": "index.jsx"
+}
