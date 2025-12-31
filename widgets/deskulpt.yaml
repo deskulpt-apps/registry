@@ -1,5 +1,1 @@
-__registry_test__:
-  version: 0.1.0
-  repo: https://github.com/deskulpt-apps/registry.git
-  commit: cd5e6952d8bbf3cf2060d642ffe9b3cddf27440a
-  path: .test-widget
+{}
