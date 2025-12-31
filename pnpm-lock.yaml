@@ -23,6 +23,9 @@ importers:
       spdx-satisfies:
         specifier: ^6.0.0
         version: 6.0.0
+      tmp:
+        specifier: ^0.2.5
+        version: 0.2.5
       yaml:
         specifier: ^2.8.2
         version: 2.8.2
@@ -51,6 +54,9 @@ importers:
       '@types/spdx-satisfies':
         specifier: ^6.0.0
         version: 6.0.0
+      '@types/tmp':
+        specifier: ^0.2.6
+        version: 0.2.6
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -301,6 +307,9 @@ packages:
   '@types/spdx-satisfies@6.0.0':
     resolution: {integrity: sha512-kOngOQzzhQrj4axuWWSWGzOO6MAe5eQ5qG3Zepe4LE/7lQJf7oYW8gAlNOywOhCpVY6oPs/YuJD463VdTk16ZQ==}
 
+  '@types/tmp@0.2.6':
+    resolution: {integrity: sha512-chhaNf2oKHlRkDGt+tiKE2Z5aJ6qalm7Z9rlLdBwmOiAAf09YQvvoLXjWK4HWPF1xU/fqvMgfNfpVoBscA/tKA==}
+
   ansi-escapes@7.2.0:
     resolution: {integrity: sha512-g6LhBsl+GBPRWGWsBtutpzBYuIIdBkLEvad5C/va/74Db018+5TZiyA26cZJAr3Rft5lprVqOIPxf5Vid6tqAw==}
     engines: {node: '>=18'}
@@ -486,6 +495,10 @@ packages:
   strip-ansi@7.1.2:
     resolution: {integrity: sha512-gmBGslpoQJtgnMAvOVqGZpEz9dyoKTCzy2nfz/n8aIFhN/jCE/rCmcxabB6jOOHV+0WNnylOxaxBQPSvcWklhA==}
     engines: {node: '>=12'}
+
+  tmp@0.2.5:
+    resolution: {integrity: sha512-voyz6MApa1rQGUxT3E+BK7/ROe8itEx7vD8/HEvt4xwXucvQ5G5oeEiHkmHZJuBO21RpOf+YYm9MOivj709jow==}
+    engines: {node: '>=14.14'}
 
   to-regex-range@5.0.1:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
@@ -796,6 +809,8 @@ snapshots:
 
   '@types/spdx-satisfies@6.0.0': {}
 
+  '@types/tmp@0.2.6': {}
+
   ansi-escapes@7.2.0:
     dependencies:
       environment: 1.1.0
@@ -973,6 +988,8 @@ snapshots:
   strip-ansi@7.1.2:
     dependencies:
       ansi-regex: 6.2.2
+
+  tmp@0.2.5: {}
 
   to-regex-range@5.0.1:
     dependencies:

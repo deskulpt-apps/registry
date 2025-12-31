@@ -6,7 +6,7 @@ import spdxParse from "spdx-expression-parse";
 import spdxSatisfies from "spdx-satisfies";
 import * as git from "./lib/git.ts";
 import * as oras from "./lib/oras.ts";
-import { die } from "./lib/utils.ts";
+import { die, tmpDir } from "./lib/utils.ts";
 import { exec } from "./lib/process.ts";
 import {
   parseWidgetManifest,
@@ -72,8 +72,6 @@ function extractSpdx(spdx: string) {
   return spdxIds;
 }
 
-const TEMP_DIR = path.resolve("temp");
-
 const publishPlan = await fs.open(PUBLISH_PLAN_PATH, "w");
 
 for (const publisher of changedPublishers) {
@@ -106,16 +104,20 @@ for (const publisher of changedPublishers) {
       console.log(`[${publisher}/${slug}] Validating updated widget...`);
     }
 
-    await fs.rm(TEMP_DIR, { recursive: true, force: true });
+    const { path: tempDir, cleanup: cleanupTempDir } = await tmpDir({
+      unsafeCleanup: true,
+    });
+    console.log(`[${publisher}/${slug}] Working directory: ${tempDir}`);
+
     await git.checkoutRepoAtCommit(
-      TEMP_DIR,
+      tempDir,
       widget.repo,
       widget.commit,
       widget.path,
     );
 
     const widgetDir =
-      widget.path === undefined ? TEMP_DIR : path.join(TEMP_DIR, widget.path);
+      widget.path === undefined ? tempDir : path.join(tempDir, widget.path);
     const manifest = await parseWidgetManifest(widgetDir);
 
     if (semver.valid(widget.version) === null) {
@@ -174,7 +176,7 @@ for (const publisher of changedPublishers) {
     );
     const pushResult = await oras.push({
       src: widgetDir,
-      dst: path.join(TEMP_DIR, "dist"),
+      dst: path.join(tempDir, "dist"),
       widget,
       manifest,
       dryRun: true,
@@ -187,6 +189,8 @@ for (const publisher of changedPublishers) {
     await publishPlan.write(JSON.stringify(planEntry) + "\n");
     console.log(planEntry);
     console.log(`::endgroup::`);
+
+    await cleanupTempDir();
   }
 }
 

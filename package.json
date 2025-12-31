@@ -17,6 +17,7 @@
     "semver": "^7.7.3",
     "spdx-expression-parse": "^4.0.0",
     "spdx-satisfies": "^6.0.0",
+    "tmp": "^0.2.5",
     "yaml": "^2.8.2",
     "zod": "^4.2.1"
   },
@@ -28,6 +29,7 @@
     "@types/semver": "^7.7.1",
     "@types/spdx-expression-parse": "^3.0.5",
     "@types/spdx-satisfies": "^6.0.0",
+    "@types/tmp": "^0.2.6",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "prettier": "^3.7.4",

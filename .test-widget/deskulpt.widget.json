@@ -4,5 +4,6 @@
   "authors": ["The Deskulpt Development Team"],
   "license": "MIT",
   "description": "For testing the Deskulpt registry.",
+  "homepage": "https://github.com/deskulpt-apps/registry/blob/main/.test-widget",
   "entry": "index.jsx"
 }

@@ -2,7 +2,7 @@ import path from "node:path/posix";
 import fs from "node:fs/promises";
 import * as git from "./lib/git.ts";
 import * as oras from "./lib/oras.ts";
-import { die } from "./lib/utils.ts";
+import { die, tmpDir } from "./lib/utils.ts";
 import {
   parsePublishPlan,
   parseRegistryIndex,
@@ -25,16 +25,18 @@ const PUBLISH_PLAN_PATH = process.env["PUBLISH_PLAN_PATH"]!;
 const REGISTRY_DIR = process.env["REGISTRY_DIR"]!;
 const API_VERSION = process.env["API_VERSION"]!;
 
-const TEMP_DIR = path.resolve("temp");
-
 const publishPlan = await parsePublishPlan(PUBLISH_PLAN_PATH);
 const registryUpdatePlan = [];
 
 for (const it of publishPlan) {
   const { publisher, slug, widget, manifest } = it;
-  await fs.rm(TEMP_DIR, { recursive: true, force: true });
+  const { path: tempDir, cleanup: cleanupTempDir } = await tmpDir({
+    unsafeCleanup: true,
+  });
+  console.log(`[${publisher}/${slug}] Working directory: ${tempDir}`);
+
   await git.checkoutRepoAtCommit(
-    TEMP_DIR,
+    tempDir,
     widget.repo,
     widget.commit,
     widget.path,
@@ -42,7 +44,7 @@ for (const it of publishPlan) {
 
   console.log(`::group::[${publisher}/${slug}] Publishing widget...`);
   const widgetDir =
-    widget.path === undefined ? TEMP_DIR : path.join(TEMP_DIR, widget.path);
+    widget.path === undefined ? tempDir : path.join(tempDir, widget.path);
   const remote = `${GHCR_REPO_PREFIX}/${publisher}/${slug}`;
   const pushResult = await oras.push({
     src: widgetDir,
@@ -62,6 +64,8 @@ for (const it of publishPlan) {
   }
 
   registryUpdatePlan.push({ ...it, publishedAt, digest: pushResult.digest });
+
+  await cleanupTempDir();
 }
 
 const now = new Date();
