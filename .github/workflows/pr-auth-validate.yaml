@@ -74,7 +74,7 @@ jobs:
         shell: bash
         env:
           LICENSE_DETECTION_SCRIPT: |
-            bundle exec licensee detect "$1" --json | jq -r '[.licenses[].spdx_id] | unique | join(" ")'
+            bundle exec bin/licensee detect "$1" --json | jq -r '[.licenses[].spdx_id] | unique | join(" ")'
         run: pnpm validate-changes
 
       - name: Display publish plan
