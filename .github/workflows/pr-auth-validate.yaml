@@ -48,9 +48,6 @@ jobs:
           ruby-version: "3.4"
           bundler-cache: true
 
-      - name: Install licensee
-        run: gem install licensee
-
       - name: Install oras
         uses: oras-project/setup-oras@v1
 
@@ -78,7 +75,7 @@ jobs:
         shell: bash
         env:
           LICENSE_DETECTION_SCRIPT: |
-            licensee detect "$1" --json | jq -r '[.licenses[].spdx_id] | unique | join(" ")'
+            bundle exec licensee detect "$1" --json | jq -r '[.licenses[].spdx_id] | unique | join(" ")'
         run: pnpm validate-changes
 
       - name: Display publish plan

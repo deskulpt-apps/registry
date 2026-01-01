@@ -12,6 +12,18 @@ updates:
         patterns:
           - "*"
 
+  # Ruby dependencies
+  - package-ecosystem: bundler
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+    groups:
+      ruby:
+        patterns:
+          - "*"
+
   # CI dependencies
   - package-ecosystem: github-actions
     directory: /
