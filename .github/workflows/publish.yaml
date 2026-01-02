@@ -31,8 +31,8 @@ jobs:
         run: |
           set -euo pipefail
           REGISTRY_DIR="$RUNNER_TEMP/registry-wt"
-          git fetch origin registry:refs/remotes/origin/registry --depth=1
-          git worktree add "$REGISTRY_DIR" origin/registry
+          git fetch origin api/$API_VERSION:refs/remotes/origin/api/$API_VERSION --depth=1
+          git worktree add "$REGISTRY_DIR" origin/api/$API_VERSION
           REGISTRY_CHECKPOINT=$(cat "$REGISTRY_DIR/.checkpoint" | tr -d '\r\n')
           BASE_SHA=$(git merge-base "$REGISTRY_CHECKPOINT" "$HEAD_SHA")
           echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
