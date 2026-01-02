@@ -99,6 +99,9 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     needs: validate-and-plan
     if: ${{ needs.validate-and-plan.outputs.HAS_PUBLISH_PLAN == '1' }}
     steps:

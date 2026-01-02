@@ -1,6 +1,6 @@
 {
   "name": "Test Basic",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "authors": ["The Deskulpt Development Team"],
   "license": "MIT",
   "description": "Basic test that a widget can be published correctly to the registry.",

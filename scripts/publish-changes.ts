@@ -1,6 +1,7 @@
 import path from "node:path/posix";
 import fs from "node:fs/promises";
 import * as git from "./lib/git.ts";
+import * as github from "./lib/github.ts";
 import * as oras from "./lib/oras.ts";
 import { die, tmpDir } from "./lib/utils.ts";
 import {
@@ -55,6 +56,9 @@ for (const it of publishPlan) {
   console.log(pushResult);
   console.log("::endgroup::");
   console.log(`::notice::Published: https://${remote}@${pushResult.digest}`);
+
+  await github.attest({ name: remote, digest: pushResult.digest });
+  console.log(`::notice::Attested: oci://${remote}@${pushResult.digest}`);
 
   let publishedAt = new Date().toISOString();
   const createdAt =

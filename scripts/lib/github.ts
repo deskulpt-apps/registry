@@ -1,4 +1,5 @@
 import { Octokit } from "octokit";
+import { attestProvenance as actionsAttestProvenance } from "@actions/attest";
 
 const GITHUB_API_VERSION = "2022-11-28";
 
@@ -26,4 +27,30 @@ export async function isOrgMember(params: {
   } catch (error) {
     return false;
   }
+}
+
+export async function attestProvenance(params: {
+  name: string;
+  digest: string;
+}) {
+  if (GH_TOKEN === undefined) {
+    throw new Error("GH_TOKEN is required for attestation");
+  }
+
+  const digestMatch = /^sha256:([0-9a-f]{64})$/i.exec(params.digest);
+  if (digestMatch === null) {
+    throw new Error(
+      `Invalid digest format: ${params.digest}; expected sha256:<64-hex-chars>`,
+    );
+  }
+
+  await actionsAttestProvenance({
+    token: GH_TOKEN,
+    subjects: [
+      {
+        name: params.name,
+        digest: { sha256: digestMatch[1]!.toLowerCase() },
+      },
+    ],
+  });
 }
