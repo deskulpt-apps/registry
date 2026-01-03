@@ -1,9 +1,9 @@
 {
   "name": "Test Basic",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "authors": ["The Deskulpt Development Team"],
   "license": "MIT",
   "description": "Basic test that a widget can be published correctly to the registry.",
-  "homepage": "https://github.com/deskulpt-apps/registry/blob/main/__tests__/widgets/basic",
+  "homepage": "https://github.com/deskulpt-apps/registry/tree/main/__tests__/widgets/basic",
   "entry": "index.jsx"
 }
