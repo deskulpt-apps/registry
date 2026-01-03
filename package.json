@@ -9,9 +9,9 @@
     "format:check": "prettier --check .",
     "lint": "oxlint --max-warnings=0 --fix .",
     "lint:check": "oxlint --max-warnings=0 .",
-    "authz": "oxnode scripts/authz.ts",
-    "validate-changes": "oxnode scripts/validate-changes.ts",
-    "publish-changes": "oxnode scripts/publish-changes.ts"
+    "authz": "oxnode .scripts/authz.ts",
+    "validate-changes": "oxnode .scripts/validate-changes.ts",
+    "publish-changes": "oxnode .scripts/publish-changes.ts"
   },
   "dependencies": {
     "@actions/attest": "^2.1.0",
