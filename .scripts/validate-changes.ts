@@ -1,5 +1,4 @@
 import path from "node:path/posix";
-import fs from "node:fs/promises";
 import deepEqual from "fast-deep-equal";
 import semver from "semver";
 import spdxParse from "spdx-expression-parse";
@@ -8,11 +7,12 @@ import * as git from "./lib/git.ts";
 import * as oras from "./lib/oras.ts";
 import { die, tmpDir } from "./lib/utils.ts";
 import { exec } from "./lib/process.ts";
+import { parseWidgetManifest } from "./lib/manifest.ts";
 import {
-  PublishPlanEntry,
+  PublishPlan,
   SAFE_IDENTIFIER_REGEX,
-  parseWidgetManifest,
-  parseWidgets,
+  parseSources,
+  writePublishPlan,
 } from "./lib/schema.ts";
 
 for (const varName of [
@@ -72,7 +72,7 @@ function extractSpdx(spdx: string) {
   return spdxIds;
 }
 
-const publishPlan = await fs.open(PUBLISH_PLAN_PATH, "w");
+const publishPlan: PublishPlan = [];
 
 for (const publisher of changedPublishers) {
   console.log(`[${publisher}] Validating widgets...`);
@@ -83,21 +83,23 @@ for (const publisher of changedPublishers) {
     );
   }
 
-  const baseWidgets = (await parseWidgets(publisher, BASE_SHA)) ?? {};
-  const headWidgets = (await parseWidgets(publisher, HEAD_SHA)) ?? {};
+  const baseSources =
+    (await parseSources("widgets", publisher, BASE_SHA)) ?? {};
+  const headSources =
+    (await parseSources("widgets", publisher, HEAD_SHA)) ?? {};
 
-  for (const slug of Object.keys(baseWidgets)) {
-    if (!(slug in headWidgets)) {
+  for (const slug of Object.keys(baseSources)) {
+    if (!(slug in headSources)) {
       die(`[${publisher}/${slug}] Published widget cannot be deleted`);
     }
   }
 
-  for (const [slug, widget] of Object.entries(headWidgets)) {
-    const baseWidget = baseWidgets[slug];
-    if (baseWidget === undefined) {
+  for (const [slug, source] of Object.entries(headSources)) {
+    const baseSource = baseSources[slug];
+    if (baseSource === undefined) {
       console.log(`[${publisher}/${slug}] Validating new widget...`);
     } else {
-      if (deepEqual(baseWidget, widget)) {
+      if (deepEqual(baseSource, source)) {
         console.log(`[${publisher}/${slug}] Skipping unchanged widget`);
         continue;
       }
@@ -109,35 +111,30 @@ for (const publisher of changedPublishers) {
     });
     console.log(`[${publisher}/${slug}] Working directory: ${tempDir}`);
 
-    await git.checkoutRepoAtCommit(
-      tempDir,
-      widget.repo,
-      widget.commit,
-      widget.path,
-    );
+    await git.checkoutRepoAtCommit(tempDir, source);
 
-    const widgetDir =
-      widget.path === undefined ? tempDir : path.join(tempDir, widget.path);
-    const manifest = await parseWidgetManifest(widgetDir);
+    const sourceDir =
+      source.path === undefined ? tempDir : path.join(tempDir, source.path);
+    const manifest = await parseWidgetManifest(sourceDir);
 
-    if (semver.valid(widget.version) === null) {
+    if (semver.valid(source.version) === null) {
       die(
-        `[${publisher}/${slug}] Widget version is not valid semver: ${widget.version}`,
+        `[${publisher}/${slug}] Widget version is not valid semver: ${source.version}`,
       );
     }
 
-    if (manifest.version !== widget.version) {
+    if (manifest.version !== source.version) {
       die(
-        `[${publisher}/${slug}] Widget version mismatch: ${manifest.version} (manifest) vs. ${widget.version} (declared)`,
+        `[${publisher}/${slug}] Widget version mismatch: ${manifest.version} (manifest) vs. ${source.version} (declared)`,
       );
     }
 
     if (
-      baseWidget !== undefined &&
-      semver.gte(baseWidget.version, widget.version)
+      baseSource !== undefined &&
+      semver.gte(baseSource.version, source.version)
     ) {
       die(
-        `[${publisher}/${slug}] Updating an existing widget must increment its version: ${baseWidget.version} -> ${widget.version}`,
+        `[${publisher}/${slug}] Updating an existing widget must increment its version: ${baseSource.version} -> ${source.version}`,
       );
     }
 
@@ -152,7 +149,7 @@ for (const publisher of changedPublishers) {
         "-c",
         LICENSE_DETECTION_SCRIPT,
         "_",
-        widgetDir,
+        sourceDir,
       ]);
       const detectedLicenses = result.stdout
         .trim()
@@ -175,26 +172,22 @@ for (const publisher of changedPublishers) {
       `::group::[${publisher}/${slug}] Packaging widget (dry run)...`,
     );
     const pushResult = await oras.push({
-      src: widgetDir,
+      src: sourceDir,
       dst: path.join(tempDir, "dist"),
-      widget,
+      source,
       manifest,
       dryRun: true,
     });
     console.log(pushResult);
     console.log(`::endgroup::`);
 
-    console.log(`::group::[${publisher}/${slug}] Writing plan...`);
-    const planEntry: PublishPlanEntry = { publisher, slug, widget, manifest };
-    await publishPlan.write(JSON.stringify(planEntry) + "\n");
-    console.log(planEntry);
-    console.log(`::endgroup::`);
-
     await cleanupTempDir();
+
+    publishPlan.push({ publisher, slug, source, manifest });
   }
 }
 
-await publishPlan.close();
+await writePublishPlan(PUBLISH_PLAN_PATH, publishPlan);
 console.log(
   `Validation complete, publish plan written to ${PUBLISH_PLAN_PATH}`,
 );

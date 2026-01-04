@@ -1,4 +1,13 @@
+import { z } from "zod";
 import { exec } from "./process.ts";
+
+export const GitSourceSchema = z.object({
+  repo: z.url(),
+  commit: z.union([z.hash("sha1"), z.hash("sha256")]),
+  path: z.string().optional(),
+});
+
+export type GitSource = z.infer<typeof GitSourceSchema>;
 
 export async function fileExistsAtCommit(path: string, commit: string) {
   try {
@@ -14,18 +23,20 @@ export async function showFileAtCommit(path: string, commit: string) {
   return result.stdout;
 }
 
-export async function checkoutRepoAtCommit(
-  dest: string,
-  repo: string,
-  commit: string,
-  path?: string,
-) {
+export async function checkoutRepoAtCommit(dest: string, source: GitSource) {
   await exec("git", ["init", dest], {});
-  await exec("git", ["-C", dest, "remote", "add", "origin", repo]);
-  await exec("git", ["-C", dest, "fetch", "--depth=1", "origin", commit]);
-  if (path !== undefined) {
+  await exec("git", ["-C", dest, "remote", "add", "origin", source.repo]);
+  await exec("git", [
+    "-C",
+    dest,
+    "fetch",
+    "--depth=1",
+    "origin",
+    source.commit,
+  ]);
+  if (source.path !== undefined) {
     await exec("git", ["-C", dest, "sparse-checkout", "init", "--cone"]);
-    await exec("git", ["-C", dest, "sparse-checkout", "set", path]);
+    await exec("git", ["-C", dest, "sparse-checkout", "set", source.path]);
   }
-  await exec("git", ["-C", dest, "checkout", "--detach", commit]);
+  await exec("git", ["-C", dest, "checkout", "--detach", source.commit]);
 }

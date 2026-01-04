@@ -38,27 +38,22 @@ if (apiIndex.api !== API_VERSION) {
 
 const publishPlan = await parsePublishPlan(PUBLISH_PLAN_PATH);
 for (const it of publishPlan) {
-  const { publisher, slug, widget, manifest } = it;
+  const { publisher, slug, source, manifest } = it;
   const { path: tempDir, cleanup: cleanupTempDir } = await tmpDir({
     unsafeCleanup: true,
   });
   console.log(`[${publisher}/${slug}] Working directory: ${tempDir}`);
 
-  await git.checkoutRepoAtCommit(
-    tempDir,
-    widget.repo,
-    widget.commit,
-    widget.path,
-  );
+  await git.checkoutRepoAtCommit(tempDir, source);
 
   console.log(`::group::[${publisher}/${slug}] Publishing widget...`);
-  const widgetDir =
-    widget.path === undefined ? tempDir : path.join(tempDir, widget.path);
+  const sourceDir =
+    source.path === undefined ? tempDir : path.join(tempDir, source.path);
   const remote = `${GHCR_REPO_PREFIX}/widgets/${publisher}/${slug}`;
   const pushResult = await oras.push({
-    src: widgetDir,
+    src: sourceDir,
     dst: remote,
-    widget,
+    source,
     manifest,
   });
   console.log(pushResult);
@@ -67,8 +62,12 @@ for (const it of publishPlan) {
 
   await cleanupTempDir();
 
-  await github.attestProvenance({ name: remote, digest: pushResult.digest });
+  const attestResult = await github.attestProvenance({
+    name: remote,
+    digest: pushResult.digest,
+  });
   console.log(`::notice::Attested: oci://${remote}@${pushResult.digest}`);
+  console.log(attestResult); // TODO: Replace with more useful information
 
   let publishedAt = new Date().toISOString();
   const createdAt =
@@ -89,7 +88,7 @@ for (const it of publishPlan) {
   console.log(`[${publisher}/${slug}] Details written`);
 
   prependApiVersionsList(API_DIR, publisher, slug, {
-    version: widget.version,
+    version: manifest.version,
     publishedAt,
   });
   console.log(`[${publisher}/${slug}] Versions list updated`);
