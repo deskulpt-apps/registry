@@ -1,3 +1,5 @@
+import path from "node:path/posix";
+import fs from "node:fs/promises";
 import { z } from "zod";
 import { SEMVER_REGEX } from "./utils.ts";
 
@@ -22,3 +24,10 @@ export const WidgetManifestSchema = z.object({
 });
 
 export type WidgetManifest = z.infer<typeof WidgetManifestSchema>;
+
+export async function parseWidgetManifest(dir: string) {
+  const manifestFile = path.join(dir, "deskulpt.widget.json");
+  const content = await fs.readFile(manifestFile, "utf-8");
+  const data = JSON.parse(content);
+  return WidgetManifestSchema.parse(data);
+}

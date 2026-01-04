@@ -1,7 +1,7 @@
 import deepEqual from "fast-deep-equal";
 import * as github from "./lib/github.ts";
 import { die } from "./lib/utils.ts";
-import { Publisher, parsePublisher } from "./lib/schema.ts";
+import { parsePublisher } from "./lib/schema.ts";
 
 for (const varName of [
   "AUTHOR_LOGIN",
@@ -29,19 +29,6 @@ if (changedPublishers.length === 0) {
   process.exit(0);
 }
 
-async function authorizedByOwnerOrOrg({ user, organization }: Publisher) {
-  if (user !== undefined && String(user) === AUTHOR_ID) {
-    return "user";
-  }
-  if (
-    organization !== undefined &&
-    (await github.isOrgMember({ orgId: organization, userLogin: AUTHOR_LOGIN }))
-  ) {
-    return "organization";
-  }
-  return null;
-}
-
 for (const publisher of changedPublishers) {
   console.log(`[${publisher}] Authorizing...`);
 
@@ -59,10 +46,33 @@ for (const publisher of changedPublishers) {
     }
   }
 
+  const isAuthorized = async () => {
+    if (
+      headPublisher.user !== undefined &&
+      String(headPublisher.user) === AUTHOR_ID
+    ) {
+      console.log(`[${publisher}] Authorized as user publisher`);
+      return true;
+    }
+
+    if (
+      headPublisher.organization !== undefined &&
+      (await github.isOrgMember({
+        orgId: headPublisher.organization,
+        userLogin: AUTHOR_LOGIN,
+      }))
+    ) {
+      console.log(
+        `[${publisher}] Authorized as member of organization publisher`,
+      );
+      return true;
+    }
+
+    return false;
+  };
+
   if (basePublisher === undefined) {
-    const authRole = await authorizedByOwnerOrOrg(headPublisher);
-    if (authRole !== null) {
-      console.log(`[${publisher}] Authorized as ${authRole} publisher (new)`);
+    if (await isAuthorized()) {
       continue;
     }
     die(`[${publisher}] Unauthorized`);
@@ -75,11 +85,7 @@ for (const publisher of changedPublishers) {
     die(`[${publisher}] Identity of existing publisher cannot be changed`);
   }
 
-  const authRole = await authorizedByOwnerOrOrg(headPublisher);
-  if (authRole !== null) {
-    console.log(
-      `[${publisher}] Authorized as ${authRole} publisher (existing)`,
-    );
+  if (await isAuthorized()) {
     continue;
   }
 

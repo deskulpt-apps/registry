@@ -44,7 +44,7 @@ export async function attestProvenance(params: {
     );
   }
 
-  await actionsAttestProvenance({
+  return await actionsAttestProvenance({
     token: GH_TOKEN,
     subjects: [
       {

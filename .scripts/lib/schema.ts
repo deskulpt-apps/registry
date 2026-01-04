@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import yaml from "yaml";
 import { z } from "zod";
 import * as git from "./git.ts";
+import { GitSourceSchema } from "./git.ts";
 import { WidgetManifestSchema } from "./manifest.ts";
 import { SEMVER_REGEX } from "./utils.ts";
 
@@ -23,26 +24,23 @@ const PublisherSchema = z
     },
   );
 
-const WidgetSchema = z.object({
-  version: z.string().regex(SEMVER_REGEX),
-  repo: z.url(),
-  commit: z.union([z.hash("sha1"), z.hash("sha256")]),
-  path: z.string().optional(),
-});
-
-const WidgetsSchema = z.record(
+const SourcesSchema = z.record(
   z.string().regex(SAFE_IDENTIFIER_REGEX),
-  WidgetSchema,
+  GitSourceSchema.extend({
+    version: z.string().regex(SEMVER_REGEX),
+  }),
 );
 
 const PublishPlanEntrySchema = z.object({
   publisher: z.string(),
   slug: z.string(),
-  widget: WidgetSchema,
+  source: GitSourceSchema,
   manifest: WidgetManifestSchema,
 });
 
 const PublishPlanSchema = z.array(PublishPlanEntrySchema);
+
+export type PublishPlan = z.infer<typeof PublishPlanSchema>;
 
 export async function parsePublisher(entry: string, commit: string) {
   const entryFile = path.join("publishers", `${entry}.yaml`);
@@ -54,21 +52,14 @@ export async function parsePublisher(entry: string, commit: string) {
   return PublisherSchema.parse(data);
 }
 
-export async function parseWidgets(entry: string, commit: string) {
-  const entryFile = path.join("widgets", `${entry}.yaml`);
+export async function parseSources(dir: string, entry: string, commit: string) {
+  const entryFile = path.join(dir, `${entry}.yaml`);
   if (!(await git.fileExistsAtCommit(entryFile, commit))) {
     return;
   }
   const content = await git.showFileAtCommit(entryFile, commit);
   const data = yaml.parse(content);
-  return WidgetsSchema.parse(data);
-}
-
-export async function parseWidgetManifest(dir: string) {
-  const manifestFile = path.join(dir, "deskulpt.widget.json");
-  const content = await fs.readFile(manifestFile, "utf-8");
-  const data = JSON.parse(content);
-  return WidgetManifestSchema.parse(data);
+  return SourcesSchema.parse(data);
 }
 
 export async function parsePublishPlan(file: string) {
@@ -81,9 +72,8 @@ export async function parsePublishPlan(file: string) {
   return PublishPlanSchema.parse(data);
 }
 
-export type Publisher = z.infer<typeof PublisherSchema>;
-export type Widget = z.infer<typeof WidgetSchema>;
-export type Widgets = z.infer<typeof WidgetsSchema>;
-export type WidgetManifest = z.infer<typeof WidgetManifestSchema>;
-export type PublishPlanEntry = z.infer<typeof PublishPlanEntrySchema>;
-export type PublishPlan = z.infer<typeof PublishPlanSchema>;
+export async function writePublishPlan(file: string, plan: PublishPlan) {
+  const lines = plan.map((entry) => JSON.stringify(entry));
+  const content = lines.join("\n") + "\n";
+  await fs.writeFile(file, content, "utf-8");
+}

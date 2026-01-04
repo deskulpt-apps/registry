@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { exec } from "./process.ts";
-import { Widget, WidgetManifest } from "./schema.ts";
+import { WidgetManifest } from "./manifest.ts";
+import { GitSource } from "./git.ts";
 
 const ORAS_CLI = process.env["ORAS_CLI"] ?? "oras";
 
@@ -23,13 +24,13 @@ const OrasPushOutputSchema = z.object({
 export async function push({
   src,
   dst,
-  widget,
+  source,
   manifest,
   dryRun = false,
 }: {
   src: string;
   dst: string;
-  widget: Widget;
+  source: GitSource;
   manifest: WidgetManifest;
   dryRun?: boolean;
 }) {
@@ -38,9 +39,9 @@ export async function push({
     created: undefined, // This will be filled by oras
     authors: JSON.stringify(manifest.authors),
     url: manifest.homepage,
-    source: `${widget.repo}@${widget.commit}`,
-    version: widget.version,
-    revision: widget.commit,
+    source: source.repo,
+    version: manifest.version,
+    revision: source.commit,
     vendor: "Deskulpt",
     licenses: manifest.license,
     title: manifest.name,
