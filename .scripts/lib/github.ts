@@ -53,5 +53,9 @@ export async function attestProvenance(params: {
       },
     ],
   });
-  return provenance;
+
+  if (provenance.attestationID === undefined) {
+    throw new Error("Attestation completed but no attestation ID was returned");
+  }
+  return provenance.attestationID;
 }

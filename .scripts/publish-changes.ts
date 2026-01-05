@@ -13,7 +13,8 @@ import {
 } from "./lib/api.ts";
 
 for (const varName of [
-  "GHCR_REPO_PREFIX",
+  "GITHUB_REPOSITORY",
+  "GITHUB_REPOSITORY_OWNER",
   "PUBLISH_PLAN_PATH",
   "API_DIR",
   "API_VERSION",
@@ -23,7 +24,8 @@ for (const varName of [
   }
 }
 
-const GHCR_REPO_PREFIX = process.env["GHCR_REPO_PREFIX"]!;
+const GITHUB_REPOSITORY = process.env["GITHUB_REPOSITORY"]!;
+const GITHUB_REPOSITORY_OWNER = process.env["GITHUB_REPOSITORY_OWNER"]!;
 const PUBLISH_PLAN_PATH = process.env["PUBLISH_PLAN_PATH"]!;
 const API_DIR = process.env["API_DIR"]!;
 const API_VERSION = process.env["API_VERSION"]!;
@@ -51,7 +53,7 @@ for (const it of publishPlan) {
 
   const sourceDir =
     source.path === undefined ? tempDir : path.join(tempDir, source.path);
-  const remote = `${GHCR_REPO_PREFIX}/${collection}/${publisher}/${slug}`;
+  const remote = `ghcr.io/${GITHUB_REPOSITORY_OWNER.toLowerCase()}/${collection}/${publisher}/${slug}`;
 
   const publishWidget = async () => {
     console.log(`::group::${prefix} Publishing...`);
@@ -63,14 +65,17 @@ for (const it of publishPlan) {
     });
     console.log(pushResult);
     console.log("::endgroup::");
-    console.log(`::notice::Published: https://${remote}@${pushResult.digest}`);
+    console.log(`::notice::${prefix} Published: https://${remote}`);
 
-    const attestResult = await github.attestProvenance({
-      name: remote,
-      digest: pushResult.digest,
-    });
-    console.log(`::notice::Attested: oci://${remote}@${pushResult.digest}`);
-    console.log(attestResult); // TODO: Replace with more useful information
+    if (process.env["SKIP_ATTESTATION"] !== "1") {
+      const attestationId = await github.attestProvenance({
+        name: remote,
+        digest: pushResult.digest,
+      });
+      console.log(
+        `::notice::${prefix} Attested: https://github.com/${GITHUB_REPOSITORY}/attestations/${attestationId}`,
+      );
+    }
 
     let publishedAt = new Date().toISOString();
     const createdAt =
