@@ -21,18 +21,16 @@ const OrasPushOutputSchema = z.object({
   referenceAsTags: z.array(z.string()),
 });
 
-export async function push({
-  src,
-  dst,
+export async function pushWidget({
+  dir,
   source,
   manifest,
-  dryRun = false,
+  remote,
 }: {
-  src: string;
-  dst: string;
+  dir: string;
   source: GitSource;
   manifest: WidgetManifest;
-  dryRun?: boolean;
+  remote?: string;
 }) {
   // https://specs.opencontainers.org/image-spec/annotations/#pre-defined-annotation-keys
   const standardAnnotations = {
@@ -48,31 +46,41 @@ export async function push({
     description: manifest.description,
   };
 
-  const args = [
+  const pushArgs = [
     "push",
+    "--oci-layout",
     "--artifact-type",
     "application/vnd.deskulpt.widget.v1",
   ];
 
-  if (dryRun) {
-    args.push("--oci-layout"); // Push to local OCI image layout
-  }
-
   for (const [key, value] of Object.entries(standardAnnotations)) {
     if (value !== undefined) {
-      args.push("--annotation", `org.opencontainers.image.${key}=${value}`);
+      pushArgs.push("--annotation", `org.opencontainers.image.${key}=${value}`);
     }
   }
 
-  args.push(
-    `${dst}:v${manifest.version}`,
-    "./", // We work in the specified source directory so package everything
+  const layoutRef = `deskulpt--oras-layout-dist:v${manifest.version}`;
+  pushArgs.push(
+    layoutRef,
+    "./", // We work in the specified directory so package everything
     "--no-tty",
     "--format",
     "json",
   );
 
-  const result = await exec(ORAS_CLI, args, { cwd: src });
-  const output = JSON.parse(result.stdout);
-  return OrasPushOutputSchema.parse(output);
+  const pushResult = await exec(ORAS_CLI, pushArgs, { cwd: dir });
+  const pushOutput = OrasPushOutputSchema.parse(JSON.parse(pushResult.stdout));
+
+  if (remote !== undefined) {
+    const cpArgs = [
+      "cp",
+      "--from-oci-layout",
+      layoutRef,
+      `${remote}:v${manifest.version}`,
+      "--no-tty",
+    ];
+    await exec(ORAS_CLI, cpArgs, { cwd: dir });
+  }
+
+  return pushOutput;
 }

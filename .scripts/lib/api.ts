@@ -1,9 +1,10 @@
 import path from "node:path/posix";
 import fs from "node:fs/promises";
 import { z } from "zod";
-import { WidgetManifestSchema } from "./manifest.ts";
+import { PluginManifestSchema, WidgetManifestSchema } from "./manifest.ts";
+import { Collection } from "./utils.ts";
 
-const ApiIndexWidgetSchema = z.object({
+const ApiIndexEntrySchema = z.object({
   publisher: z.string(),
   slug: z.string(),
   version: z.string(),
@@ -17,7 +18,8 @@ const ApiIndexWidgetSchema = z.object({
 const ApiIndexSchema = z.object({
   api: z.string(),
   generatedAt: z.iso.datetime(),
-  widgets: z.array(ApiIndexWidgetSchema),
+  widgets: z.array(ApiIndexEntrySchema),
+  plugins: z.array(ApiIndexEntrySchema),
 });
 
 const ApiVersionsListSchema = z.array(
@@ -33,9 +35,15 @@ const ApiWidgetDetailsSchema = z.object({
   manifest: WidgetManifestSchema,
 });
 
+const ApiPluginDetailsSchema = z.object({
+  publishedAt: z.iso.datetime(),
+  manifest: PluginManifestSchema,
+});
+
 export type ApiIndex = z.infer<typeof ApiIndexSchema>;
 export type ApiVersionsList = z.infer<typeof ApiVersionsListSchema>;
 export type ApiWidgetDetails = z.infer<typeof ApiWidgetDetailsSchema>;
+export type ApiPluginDetails = z.infer<typeof ApiPluginDetailsSchema>;
 
 export async function parseApiIndex(dir: string) {
   const indexFile = path.join(dir, "index.json");
@@ -52,11 +60,12 @@ export async function writeApiIndex(dir: string, index: ApiIndex) {
 
 export async function prependApiVersionsList(
   dir: string,
+  collection: Collection,
   publisher: string,
   slug: string,
   versionInfo: ApiVersionsList[number],
 ) {
-  const baseDir = path.join(dir, "widgets", publisher, slug);
+  const baseDir = path.join(dir, collection, publisher, slug);
   await fs.mkdir(baseDir, { recursive: true });
 
   const versionsListFile = path.join(baseDir, "versions.json");
@@ -76,6 +85,20 @@ export async function writeApiWidgetDetails(
   details: ApiWidgetDetails,
 ) {
   const baseDir = path.join(dir, "widgets", publisher, slug);
+  await fs.mkdir(baseDir, { recursive: true });
+
+  const detailsFile = path.join(baseDir, `${details.manifest.version}.json`);
+  const content = JSON.stringify(details);
+  await fs.writeFile(detailsFile, content, "utf-8");
+}
+
+export async function writeApiPluginDetails(
+  dir: string,
+  publisher: string,
+  slug: string,
+  details: ApiPluginDetails,
+) {
+  const baseDir = path.join(dir, "plugins", publisher, slug);
   await fs.mkdir(baseDir, { recursive: true });
 
   const detailsFile = path.join(baseDir, `${details.manifest.version}.json`);

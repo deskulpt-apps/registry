@@ -8,7 +8,7 @@ on:
 env:
   GH_TOKEN: ${{ github.token }}
   HEAD_SHA: ${{ github.sha }}
-  PUBLISH_PLAN_PATH: "publish-plan.ndjson"
+  PUBLISH_PLAN_PATH: "publish-plan.json"
   API_VERSION: 2025-12-30
 
 concurrency:
@@ -63,7 +63,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          DIFF_FILES=$(git diff --name-only --no-renames "$BASE_SHA" "$HEAD_SHA" | grep -E '^(publishers|widgets)/.*\.yaml$' || true)
+          DIFF_FILES=$(git diff --name-only --no-renames "$BASE_SHA" "$HEAD_SHA" | grep -E '^(publishers|widgets|plugins)/.*\.yaml$' || true)
           if [ -z "$DIFF_FILES" ]; then
             echo "No matching files changed."
             echo "CHANGED_PUBLISHERS=" >> $GITHUB_ENV

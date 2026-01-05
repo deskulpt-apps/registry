@@ -1,19 +1,24 @@
 import path from "node:path/posix";
 import deepEqual from "fast-deep-equal";
 import semver from "semver";
-import spdxParse from "spdx-expression-parse";
-import spdxSatisfies from "spdx-satisfies";
 import * as git from "./lib/git.ts";
 import * as oras from "./lib/oras.ts";
-import { die, tmpDir } from "./lib/utils.ts";
+import { ALL_COLLECTIONS, die, tmpDir } from "./lib/utils.ts";
 import { exec } from "./lib/process.ts";
-import { parseWidgetManifest } from "./lib/manifest.ts";
+import {
+  ManifestMetadata,
+  PluginManifest,
+  WidgetManifest,
+  parsePluginManifest,
+  parseWidgetManifest,
+} from "./lib/manifest.ts";
 import {
   PublishPlan,
   SAFE_IDENTIFIER_REGEX,
   parseSources,
   writePublishPlan,
 } from "./lib/schema.ts";
+import { extractLicenses, isLicenseAccepted } from "./lib/license.ts";
 
 for (const varName of [
   "BASE_SHA",
@@ -40,154 +45,137 @@ if (changedPublishers.length === 0) {
   process.exit(0);
 }
 
-const ACCEPTED_LICENSES = ["Apache-2.0", "BSD-3-Clause", "MIT"];
-
-function extractSpdx(spdx: string) {
-  const spdxIds = new Set<string>();
-  const parsed = spdxParse(spdx);
-
-  const nodeIsLicenseInfo = (
-    node: spdxParse.Info,
-  ): node is spdxParse.LicenseInfo =>
-    (node as spdxParse.LicenseInfo).license !== undefined;
-
-  const nodeIsConjunctionInfo = (
-    node: spdxParse.Info,
-  ): node is spdxParse.ConjunctionInfo =>
-    (node as spdxParse.ConjunctionInfo).conjunction !== undefined;
-
-  const visit = (node: spdxParse.Info) => {
-    if (nodeIsLicenseInfo(node)) {
-      const spdxId = node.plus ? `${node.license}+` : node.license;
-      if (ACCEPTED_LICENSES.includes(spdxId)) {
-        spdxIds.add(spdxId);
-      }
-    } else if (nodeIsConjunctionInfo(node)) {
-      visit(node.left);
-      visit(node.right);
-    }
-  };
-
-  visit(parsed);
-  return spdxIds;
-}
-
 const publishPlan: PublishPlan = [];
 
 for (const publisher of changedPublishers) {
-  console.log(`[${publisher}] Validating widgets...`);
-
   if (!SAFE_IDENTIFIER_REGEX.test(publisher)) {
     die(
       `[${publisher}] Invalid publisher identifier; expected to match ${SAFE_IDENTIFIER_REGEX}`,
     );
   }
 
-  const baseSources =
-    (await parseSources("widgets", publisher, BASE_SHA)) ?? {};
-  const headSources =
-    (await parseSources("widgets", publisher, HEAD_SHA)) ?? {};
+  for (const collection of ALL_COLLECTIONS) {
+    console.log(`[${publisher}] Validating ${collection}...`);
 
-  for (const slug of Object.keys(baseSources)) {
-    if (!(slug in headSources)) {
-      die(`[${publisher}/${slug}] Published widget cannot be deleted`);
-    }
-  }
+    const baseSources = await parseSources(collection, publisher, BASE_SHA);
+    const headSources = await parseSources(collection, publisher, HEAD_SHA);
 
-  for (const [slug, source] of Object.entries(headSources)) {
-    const baseSource = baseSources[slug];
-    if (baseSource === undefined) {
-      console.log(`[${publisher}/${slug}] Validating new widget...`);
-    } else {
-      if (deepEqual(baseSource, source)) {
-        console.log(`[${publisher}/${slug}] Skipping unchanged widget`);
-        continue;
+    for (const slug of Object.keys(baseSources)) {
+      if (!(slug in headSources)) {
+        die(
+          `[${publisher}/${slug}] [${collection}] Cannot deleted published item`,
+        );
       }
-      console.log(`[${publisher}/${slug}] Validating updated widget...`);
     }
 
-    const { path: tempDir, cleanup: cleanupTempDir } = await tmpDir({
-      unsafeCleanup: true,
-    });
-    console.log(`[${publisher}/${slug}] Working directory: ${tempDir}`);
+    for (const [slug, source] of Object.entries(headSources)) {
+      const prefix = `[${publisher}/${slug}] [${collection}]`;
+      const baseSource = baseSources[slug];
 
-    await git.checkoutRepoAtCommit(tempDir, source);
+      if (baseSource === undefined) {
+        console.log(`${prefix} New`);
+      } else {
+        if (deepEqual(baseSource, source)) {
+          console.log(`${prefix} Unchanged: skipped`);
+          continue;
+        }
+        console.log(`${prefix} Updated`);
+      }
 
-    const sourceDir =
-      source.path === undefined ? tempDir : path.join(tempDir, source.path);
-    const manifest = await parseWidgetManifest(sourceDir);
+      if (semver.valid(source.version) === null) {
+        die(`${prefix} Invalid semver: ${source.version}`);
+      }
 
-    if (semver.valid(source.version) === null) {
-      die(
-        `[${publisher}/${slug}] Widget version is not valid semver: ${source.version}`,
-      );
-    }
+      if (
+        baseSource !== undefined &&
+        semver.gte(baseSource.version, source.version)
+      ) {
+        die(
+          `${prefix} Version must be incremented: ${baseSource.version} -> ${source.version}`,
+        );
+      }
 
-    if (manifest.version !== source.version) {
-      die(
-        `[${publisher}/${slug}] Widget version mismatch: ${manifest.version} (manifest) vs. ${source.version} (declared)`,
-      );
-    }
+      const { path: tempDir, cleanup: cleanupTempDir } = await tmpDir({
+        unsafeCleanup: true,
+      });
+      console.log(`${prefix} Working directory: ${tempDir}`);
 
-    if (
-      baseSource !== undefined &&
-      semver.gte(baseSource.version, source.version)
-    ) {
-      die(
-        `[${publisher}/${slug}] Updating an existing widget must increment its version: ${baseSource.version} -> ${source.version}`,
-      );
-    }
+      await git.checkoutRepoAtCommit(tempDir, source);
 
-    if (!spdxSatisfies(manifest.license, ACCEPTED_LICENSES)) {
-      die(
-        `[${publisher}/${slug}] License "${manifest.license}" not accepted; accepted licenses: ${ACCEPTED_LICENSES.join(", ")}`,
-      );
-    }
+      const sourceDir =
+        source.path === undefined ? tempDir : path.join(tempDir, source.path);
 
-    if (LICENSE_DETECTION_SCRIPT !== undefined) {
-      const result = await exec("bash", [
-        "-c",
-        LICENSE_DETECTION_SCRIPT,
-        "_",
-        sourceDir,
-      ]);
-      const detectedLicenses = result.stdout
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-
-      const spdxIds = extractSpdx(manifest.license);
-      for (const spdxId of spdxIds) {
-        if (!detectedLicenses.includes(spdxId)) {
+      const validateManifestMetadata = async (manifest: ManifestMetadata) => {
+        if (manifest.version !== source.version) {
           die(
-            `[${publisher}/${slug}] License "${spdxId}" declared but not detected in the widget source; detected licenses are: ${detectedLicenses.join(", ")}`,
+            `${prefix} Version mismatch: ${manifest.version} (manifest) vs. ${source.version} (declared)`,
           );
         }
+
+        if (!isLicenseAccepted(manifest.license)) {
+          die(`${prefix} License "${manifest.license}" not accepted`);
+        }
+
+        if (LICENSE_DETECTION_SCRIPT !== undefined) {
+          const result = await exec("bash", [
+            "-c",
+            LICENSE_DETECTION_SCRIPT,
+            "_",
+            sourceDir,
+          ]);
+          const detectedLicenses = result.stdout
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
+
+          const declaredLicenses = extractLicenses(manifest.license);
+          for (const license of declaredLicenses) {
+            if (!detectedLicenses.includes(license)) {
+              die(
+                `${prefix} License "${license}" declared but not detected in source; detected licenses are: ${detectedLicenses.join(", ")}`,
+              );
+            }
+          }
+
+          console.log(`${prefix} Metadata validation passed`);
+        }
+      };
+
+      const validateWidgetManifest = async (manifest: WidgetManifest) => {
+        console.log(`::group::${prefix} Packaging widget (dry run)...`);
+        const pushResult = await oras.pushWidget({
+          dir: sourceDir,
+          source,
+          manifest,
+        });
+        console.log(pushResult);
+        console.log(`::endgroup::`);
+
+        console.log(`${prefix} Widget manifest validation passed`);
+      };
+
+      const validatePluginManifest = async (_manifest: PluginManifest) => {
+        // TODO: Add plugin-specific validations here in the future
+        await Promise.resolve();
+        console.warn(`::warning::${prefix} Plugin not fully supported yet`);
+      };
+
+      if (collection === "widgets") {
+        const manifest = await parseWidgetManifest(sourceDir);
+        await validateManifestMetadata(manifest);
+        await validateWidgetManifest(manifest);
+        publishPlan.push({ collection, publisher, slug, source, manifest });
+      } else {
+        const manifest = await parsePluginManifest(sourceDir);
+        await validateManifestMetadata(manifest);
+        await validatePluginManifest(manifest);
+        publishPlan.push({ collection, publisher, slug, source, manifest });
       }
+
+      await cleanupTempDir();
     }
-
-    console.log(`[${publisher}/${slug}] Validation passed`);
-
-    console.log(
-      `::group::[${publisher}/${slug}] Packaging widget (dry run)...`,
-    );
-    const pushResult = await oras.push({
-      src: sourceDir,
-      dst: path.join(tempDir, "dist"),
-      source,
-      manifest,
-      dryRun: true,
-    });
-    console.log(pushResult);
-    console.log(`::endgroup::`);
-
-    await cleanupTempDir();
-
-    publishPlan.push({ publisher, slug, source, manifest });
   }
 }
 
 await writePublishPlan(PUBLISH_PLAN_PATH, publishPlan);
-console.log(
-  `Validation complete, publish plan written to ${PUBLISH_PLAN_PATH}`,
-);
+console.log(`Publish plan written to: ${PUBLISH_PLAN_PATH}`);

@@ -1,7 +1,7 @@
 import deepEqual from "fast-deep-equal";
 import * as github from "./lib/github.ts";
 import { die } from "./lib/utils.ts";
-import { parsePublisher } from "./lib/schema.ts";
+import { SAFE_IDENTIFIER_REGEX, parsePublisher } from "./lib/schema.ts";
 
 for (const varName of [
   "AUTHOR_LOGIN",
@@ -31,6 +31,12 @@ if (changedPublishers.length === 0) {
 
 for (const publisher of changedPublishers) {
   console.log(`[${publisher}] Authorizing...`);
+
+  if (!SAFE_IDENTIFIER_REGEX.test(publisher)) {
+    die(
+      `[${publisher}] Invalid publisher identifier; expected to match ${SAFE_IDENTIFIER_REGEX}`,
+    );
+  }
 
   const basePublisher = await parsePublisher(publisher, BASE_SHA);
   const headPublisher = await parsePublisher(publisher, HEAD_SHA);

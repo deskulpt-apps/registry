@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import * as git from "./lib/git.ts";
 import * as github from "./lib/github.ts";
 import * as oras from "./lib/oras.ts";
-import { die, tmpDir } from "./lib/utils.ts";
+import { ALL_COLLECTIONS, die, pushOrReplace, tmpDir } from "./lib/utils.ts";
 import { parsePublishPlan } from "./lib/schema.ts";
 import {
   parseApiIndex,
@@ -37,61 +37,74 @@ if (apiIndex.api !== API_VERSION) {
 }
 
 const publishPlan = await parsePublishPlan(PUBLISH_PLAN_PATH);
+
 for (const it of publishPlan) {
-  const { publisher, slug, source, manifest } = it;
+  const { collection, publisher, slug, source, manifest } = it;
+  const prefix = `[${publisher}/${slug}] [${collection}]`;
+
   const { path: tempDir, cleanup: cleanupTempDir } = await tmpDir({
     unsafeCleanup: true,
   });
-  console.log(`[${publisher}/${slug}] Working directory: ${tempDir}`);
+  console.log(`${prefix} Working directory: ${tempDir}`);
 
   await git.checkoutRepoAtCommit(tempDir, source);
 
-  console.log(`::group::[${publisher}/${slug}] Publishing widget...`);
   const sourceDir =
     source.path === undefined ? tempDir : path.join(tempDir, source.path);
-  const remote = `${GHCR_REPO_PREFIX}/widgets/${publisher}/${slug}`;
-  const pushResult = await oras.push({
-    src: sourceDir,
-    dst: remote,
-    source,
-    manifest,
-  });
-  console.log(pushResult);
-  console.log("::endgroup::");
-  console.log(`::notice::Published: https://${remote}@${pushResult.digest}`);
+  const remote = `${GHCR_REPO_PREFIX}/${collection}/${publisher}/${slug}`;
+
+  const publishWidget = async () => {
+    console.log(`::group::${prefix} Publishing...`);
+    const pushResult = await oras.pushWidget({
+      dir: sourceDir,
+      source,
+      manifest,
+      remote,
+    });
+    console.log(pushResult);
+    console.log("::endgroup::");
+    console.log(`::notice::Published: https://${remote}@${pushResult.digest}`);
+
+    const attestResult = await github.attestProvenance({
+      name: remote,
+      digest: pushResult.digest,
+    });
+    console.log(`::notice::Attested: oci://${remote}@${pushResult.digest}`);
+    console.log(attestResult); // TODO: Replace with more useful information
+
+    let publishedAt = new Date().toISOString();
+    const createdAt =
+      pushResult.annotations?.["org.opencontainers.image.created"];
+    if (createdAt !== undefined) {
+      publishedAt = createdAt;
+    }
+
+    writeApiWidgetDetails(API_DIR, publisher, slug, {
+      publishedAt,
+      digest: pushResult.digest,
+      manifest,
+    });
+    console.log(`${prefix} Details written`);
+
+    return { publishedAt };
+  };
+
+  let publishResult;
+  if (collection === "widgets") {
+    publishResult = await publishWidget();
+  } else {
+    console.warn(`::warning::${prefix} Plugin publishing not supported yet`);
+    await cleanupTempDir();
+    continue;
+  }
 
   await cleanupTempDir();
 
-  const attestResult = await github.attestProvenance({
-    name: remote,
-    digest: pushResult.digest,
-  });
-  console.log(`::notice::Attested: oci://${remote}@${pushResult.digest}`);
-  console.log(attestResult); // TODO: Replace with more useful information
-
-  let publishedAt = new Date().toISOString();
-  const createdAt =
-    pushResult.annotations?.["org.opencontainers.image.created"];
-  if (createdAt !== undefined) {
-    publishedAt = createdAt;
-  }
-
-  let entry = apiIndex.widgets.find(
-    (e) => e.publisher === publisher && e.slug === slug,
-  );
-
-  writeApiWidgetDetails(API_DIR, publisher, slug, {
-    publishedAt,
-    digest: pushResult.digest,
-    manifest,
-  });
-  console.log(`[${publisher}/${slug}] Details written`);
-
-  prependApiVersionsList(API_DIR, publisher, slug, {
+  prependApiVersionsList(API_DIR, collection, publisher, slug, {
     version: manifest.version,
-    publishedAt,
+    publishedAt: publishResult.publishedAt,
   });
-  console.log(`[${publisher}/${slug}] Versions list updated`);
+  console.log(`${prefix} Versions list updated`);
 
   const isPrivate = publisher === "deskulpt-test";
   const isOfficial = publisher === "deskulpt";
@@ -99,38 +112,39 @@ for (const it of publishPlan) {
     typeof author === "string" ? author : author.name,
   );
 
-  if (entry === undefined) {
-    entry = {
-      publisher,
-      slug,
-      version: manifest.version,
-      name: manifest.name,
-      description: manifest.description,
-      authors: authorNames,
-      private: isPrivate ? true : undefined,
-      official: isOfficial ? true : undefined,
-    };
-    apiIndex.widgets.push(entry);
-    continue;
-  }
+  const entry = {
+    publisher,
+    slug,
+    version: manifest.version,
+    name: manifest.name,
+    description: manifest.description,
+    authors: authorNames,
+    private: isPrivate ? true : undefined,
+    official: isOfficial ? true : undefined,
+  };
 
-  entry.version = manifest.version;
-  entry.name = manifest.name;
-  entry.description = manifest.description;
-  entry.authors = authorNames;
-  entry.private = isPrivate ? true : undefined;
-  entry.official = isOfficial ? true : undefined;
+  let entryIndex = apiIndex[collection].findIndex(
+    (e) => e.publisher === publisher && e.slug === slug,
+  );
+
+  if (collection === "widgets") {
+    pushOrReplace(apiIndex.widgets, entryIndex, entry);
+  } else {
+    // TODO: Add the plugins case when supported
+  }
 }
 
 const now = new Date();
 apiIndex.generatedAt = now.toISOString();
 
-apiIndex.widgets.sort((a, b) => {
-  if (a.publisher !== b.publisher) {
-    return a.publisher.localeCompare(b.publisher);
-  }
-  return a.slug.localeCompare(b.slug);
-});
+for (const collection of ALL_COLLECTIONS) {
+  apiIndex[collection].sort((a, b) => {
+    if (a.publisher !== b.publisher) {
+      return a.publisher.localeCompare(b.publisher);
+    }
+    return a.slug.localeCompare(b.slug);
+  });
+}
 
 await writeApiIndex(API_DIR, apiIndex);
 console.log("Registry API index updated");
