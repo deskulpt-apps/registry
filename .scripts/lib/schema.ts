@@ -4,7 +4,7 @@ import yaml from "yaml";
 import { z } from "zod";
 import * as git from "./git.ts";
 import { GitSourceSchema } from "./git.ts";
-import { WidgetManifestSchema } from "./manifest.ts";
+import { PluginManifestSchema, WidgetManifestSchema } from "./manifest.ts";
 import { SEMVER_REGEX } from "./utils.ts";
 
 // Safe identifier: lowercase letters, digits, underscores, hyphens; no leading,
@@ -31,12 +31,22 @@ const SourcesSchema = z.record(
   }),
 );
 
-const PublishPlanEntrySchema = z.object({
+const PublishPlanEntryBaseSchema = z.object({
   publisher: z.string(),
   slug: z.string(),
   source: GitSourceSchema,
-  manifest: WidgetManifestSchema,
 });
+
+const PublishPlanEntrySchema = z.discriminatedUnion("collection", [
+  PublishPlanEntryBaseSchema.extend({
+    collection: z.literal("widgets"),
+    manifest: WidgetManifestSchema,
+  }),
+  PublishPlanEntryBaseSchema.extend({
+    collection: z.literal("plugins"),
+    manifest: PluginManifestSchema,
+  }),
+]);
 
 const PublishPlanSchema = z.array(PublishPlanEntrySchema);
 
@@ -55,7 +65,7 @@ export async function parsePublisher(entry: string, commit: string) {
 export async function parseSources(dir: string, entry: string, commit: string) {
   const entryFile = path.join(dir, `${entry}.yaml`);
   if (!(await git.fileExistsAtCommit(entryFile, commit))) {
-    return;
+    return {};
   }
   const content = await git.showFileAtCommit(entryFile, commit);
   const data = yaml.parse(content);
@@ -64,16 +74,11 @@ export async function parseSources(dir: string, entry: string, commit: string) {
 
 export async function parsePublishPlan(file: string) {
   const content = await fs.readFile(file, "utf-8");
-  const data = content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
+  const data = JSON.parse(content);
   return PublishPlanSchema.parse(data);
 }
 
 export async function writePublishPlan(file: string, plan: PublishPlan) {
-  const lines = plan.map((entry) => JSON.stringify(entry));
-  const content = lines.join("\n") + "\n";
+  const content = JSON.stringify(plan, null, 2) + "\n";
   await fs.writeFile(file, content, "utf-8");
 }
