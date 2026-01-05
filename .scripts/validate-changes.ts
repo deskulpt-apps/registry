@@ -144,9 +144,9 @@ async function validateCollection(publisher: string, collection: Collection) {
             );
           }
         }
-
-        console.log(`${prefix} Metadata validation passed`);
       }
+
+      console.log(`${prefix} Metadata validation passed`);
     };
 
     const validateWidgetManifest = async (manifest: WidgetManifest) => {

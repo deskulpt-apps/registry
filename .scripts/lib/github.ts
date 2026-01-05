@@ -44,7 +44,7 @@ export async function attestProvenance(params: {
     );
   }
 
-  return await actionsAttestProvenance({
+  const provenance = await actionsAttestProvenance({
     token: GH_TOKEN,
     subjects: [
       {
@@ -53,4 +53,5 @@ export async function attestProvenance(params: {
       },
     ],
   });
+  return provenance;
 }

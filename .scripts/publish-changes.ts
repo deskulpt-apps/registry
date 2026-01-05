@@ -79,7 +79,7 @@ for (const it of publishPlan) {
       publishedAt = createdAt;
     }
 
-    writeApiWidgetDetails(API_DIR, publisher, slug, {
+    await writeApiWidgetDetails(API_DIR, publisher, slug, {
       publishedAt,
       digest: pushResult.digest,
       manifest,
@@ -100,7 +100,7 @@ for (const it of publishPlan) {
 
   await cleanupTempDir();
 
-  prependApiVersionsList(API_DIR, collection, publisher, slug, {
+  await prependApiVersionsList(API_DIR, collection, publisher, slug, {
     version: manifest.version,
     publishedAt: publishResult.publishedAt,
   });

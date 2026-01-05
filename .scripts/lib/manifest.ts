@@ -22,12 +22,8 @@ const ManifestMetadataSchema = z.object({
   homepage: z.url(),
 });
 
-export const WidgetManifestSchema = ManifestMetadataSchema.extend({
-  w: z.boolean().optional(),
-});
-export const PluginManifestSchema = ManifestMetadataSchema.extend({
-  p: z.boolean().optional(),
-});
+export const WidgetManifestSchema = ManifestMetadataSchema.extend({});
+export const PluginManifestSchema = ManifestMetadataSchema.extend({});
 
 export type ManifestMetadata = z.infer<typeof ManifestMetadataSchema>;
 export type WidgetManifest = z.infer<typeof WidgetManifestSchema>;

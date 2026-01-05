@@ -59,7 +59,9 @@ export async function pushWidget({
     }
   }
 
-  const layoutRef = `deskulpt--oras-layout-dist:v${manifest.version}`;
+  const randomId = Math.random().toString(36).slice(2);
+  const layoutRef = `dist-layout-${randomId}:v${manifest.version}`;
+
   pushArgs.push(
     layoutRef,
     "./", // We work in the specified directory so package everything
