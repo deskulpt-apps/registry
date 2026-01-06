@@ -79,6 +79,6 @@ export async function parsePublishPlan(file: string) {
 }
 
 export async function writePublishPlan(file: string, plan: PublishPlan) {
-  const content = JSON.stringify(plan, null, 2) + "\n";
+  const content = JSON.stringify(plan);
   await fs.writeFile(file, content, "utf-8");
 }

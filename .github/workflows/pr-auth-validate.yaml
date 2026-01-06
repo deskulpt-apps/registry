@@ -79,4 +79,4 @@ jobs:
       - name: Display publish plan
         shell: bash
         run: |
-          [ -s "$PUBLISH_PLAN_PATH" ] && cat "$PUBLISH_PLAN_PATH" || echo "No publish plan."
+          [ -s "$PUBLISH_PLAN_PATH" ] && jq "." "$PUBLISH_PLAN_PATH" || echo "No publish plan."
