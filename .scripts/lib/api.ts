@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import { z } from "zod";
 import { PluginManifestSchema, WidgetManifestSchema } from "./manifest.ts";
 import { Collection } from "./utils.ts";
+import { GitSourceSchema } from "./git.ts";
 
 const ApiIndexEntrySchema = z.object({
   publisher: z.string(),
@@ -29,14 +30,17 @@ const ApiVersionsListSchema = z.array(
   }),
 );
 
-const ApiWidgetDetailsSchema = z.object({
+const ApiBaseDetailsSchema = z.object({
   publishedAt: z.iso.datetime(),
   digest: z.string(),
+  source: GitSourceSchema,
+});
+
+const ApiWidgetDetailsSchema = ApiBaseDetailsSchema.extend({
   manifest: WidgetManifestSchema,
 });
 
-const ApiPluginDetailsSchema = z.object({
-  publishedAt: z.iso.datetime(),
+const ApiPluginDetailsSchema = ApiBaseDetailsSchema.extend({
   manifest: PluginManifestSchema,
 });
 

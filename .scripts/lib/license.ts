@@ -1,3 +1,4 @@
+import path from "node:path/posix";
 import spdxParse from "spdx-expression-parse";
 import spdxSatisfies from "spdx-satisfies";
 import { z } from "zod";
@@ -22,7 +23,7 @@ const LICENSEE_DETECT_OUTPUT_SCHEMA = z.object({
 
 const ACCEPTED_LICENSES = ["Apache-2.0", "BSD-3-Clause", "MIT"];
 
-async function detectLicense(fileOrDir: string) {
+async function detectLicense(base: string, fileOrDir: string) {
   if (LICENSEE_DETECT_SCRIPT === undefined) {
     throw new Error("LICENSEE_DETECT_SCRIPT is not defined");
   }
@@ -31,7 +32,7 @@ async function detectLicense(fileOrDir: string) {
     "-c",
     LICENSEE_DETECT_SCRIPT,
     "_",
-    fileOrDir,
+    path.join(base, fileOrDir),
   ]);
   const output = LICENSEE_DETECT_OUTPUT_SCHEMA.parse(JSON.parse(result.stdout));
 
@@ -45,7 +46,10 @@ async function detectLicense(fileOrDir: string) {
   return licenses;
 }
 
-export async function validateLicense(spdx: string, files?: string[]) {
+export async function validateLicense(
+  spdx: string,
+  options: { base: string; files?: string[] },
+) {
   if (LICENSEE_DETECT_SCRIPT === undefined) {
     return;
   }
@@ -66,14 +70,14 @@ export async function validateLicense(spdx: string, files?: string[]) {
   }
 
   const detectedSet = new Set<string>();
-  if (files === undefined) {
-    const detectedLicenses = await detectLicense(".");
+  if (options.files === undefined) {
+    const detectedLicenses = await detectLicense(options.base, ".");
     for (const license of detectedLicenses) {
       detectedSet.add(license);
     }
   } else {
-    for (const file of files) {
-      const detectedLicenses = await detectLicense(file);
+    for (const file of options.files) {
+      const detectedLicenses = await detectLicense(options.base, file);
       for (const license of detectedLicenses) {
         detectedSet.add(license);
       }
