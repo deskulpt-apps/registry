@@ -1,7 +1,11 @@
+import fs from "node:fs/promises";
+import path from "node:path/posix";
+import * as tar from "tar";
 import { z } from "zod";
 import { exec } from "./process.ts";
 import { WidgetManifest } from "./manifest.ts";
 import { GitSource } from "./git.ts";
+import * as tmp from "./tmp.ts";
 
 const ORAS_CLI = process.env["ORAS_CLI"] ?? "oras";
 
@@ -32,6 +36,29 @@ export async function pushWidget({
   manifest: WidgetManifest;
   remote?: string;
 }) {
+  const randomId = Math.random().toString(36).slice(2);
+  const archiveFile = `archive-${randomId}.tar.gz`;
+  const layoutRef = `dist-layout-${randomId}:v${manifest.version}`;
+
+  // ORAS hates absolute paths so we have to finally keep the archive in a
+  // relative path, but if we create the archive in the target directory the
+  // archive will include itself, so we create it at a temp location first then
+  // copy it over
+  const tempFile = await tmp.file({ postfix: ".tar.gz" });
+  await tar.c(
+    {
+      cwd: dir,
+      file: tempFile.path,
+      gzip: true,
+      follow: true, // Resolve symlinks to avoid security issues
+      portable: true, // Ensure consistent file metadata
+      noMtime: true, // No timestamp for deterministic builds
+    },
+    ["."],
+  );
+  await fs.copyFile(tempFile.path, path.join(dir, archiveFile));
+  await tempFile.cleanup();
+
   // https://specs.opencontainers.org/image-spec/annotations/#pre-defined-annotation-keys
   const standardAnnotations = {
     created: undefined, // This will be filled by oras
@@ -59,12 +86,9 @@ export async function pushWidget({
     }
   }
 
-  const randomId = Math.random().toString(36).slice(2);
-  const layoutRef = `dist-layout-${randomId}:v${manifest.version}`;
-
   pushArgs.push(
     layoutRef,
-    "./", // We work in the specified directory so package everything
+    `${archiveFile}:application/vnd.oci.image.layer.v1.tar+gzip`,
     "--no-tty",
     "--format",
     "json",

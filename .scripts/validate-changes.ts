@@ -3,7 +3,8 @@ import deepEqual from "fast-deep-equal";
 import semver from "semver";
 import * as git from "./lib/git.ts";
 import * as oras from "./lib/oras.ts";
-import { ALL_COLLECTIONS, Collection, die, tmpDir } from "./lib/utils.ts";
+import * as tmp from "./lib/tmp.ts";
+import { ALL_COLLECTIONS, Collection, die } from "./lib/utils.ts";
 import { exec } from "./lib/process.ts";
 import {
   ManifestMetadata,
@@ -103,15 +104,15 @@ async function validateCollection(publisher: string, collection: Collection) {
       );
     }
 
-    const { path: tempDir, cleanup: cleanupTempDir } = await tmpDir({
-      unsafeCleanup: true,
-    });
-    console.log(`${prefix} Working directory: ${tempDir}`);
+    const tempDir = await tmp.dir({ unsafeCleanup: true });
+    console.log(`${prefix} Working directory: ${tempDir.path}`);
 
-    await git.checkoutRepoAtCommit(tempDir, source);
+    await git.checkoutRepoAtCommit(tempDir.path, source);
 
     const sourceDir =
-      source.path === undefined ? tempDir : path.join(tempDir, source.path);
+      source.path === undefined
+        ? tempDir.path
+        : path.join(tempDir.path, source.path);
 
     const validateManifestMetadata = async (manifest: ManifestMetadata) => {
       if (manifest.version !== source.version) {
@@ -180,6 +181,6 @@ async function validateCollection(publisher: string, collection: Collection) {
       publishPlan.push({ collection, publisher, slug, source, manifest });
     }
 
-    await cleanupTempDir();
+    await tempDir.cleanup();
   }
 }

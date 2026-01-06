@@ -3,7 +3,8 @@ import fs from "node:fs/promises";
 import * as git from "./lib/git.ts";
 import * as github from "./lib/github.ts";
 import * as oras from "./lib/oras.ts";
-import { ALL_COLLECTIONS, die, pushOrReplace, tmpDir } from "./lib/utils.ts";
+import * as tmp from "./lib/tmp.ts";
+import { ALL_COLLECTIONS, die, pushOrReplace } from "./lib/utils.ts";
 import { parsePublishPlan } from "./lib/schema.ts";
 import {
   parseApiIndex,
@@ -44,15 +45,15 @@ for (const it of publishPlan) {
   const { collection, publisher, slug, source, manifest } = it;
   const prefix = `[${publisher}/${slug}] [${collection}]`;
 
-  const { path: tempDir, cleanup: cleanupTempDir } = await tmpDir({
-    unsafeCleanup: true,
-  });
-  console.log(`${prefix} Working directory: ${tempDir}`);
+  const tempDir = await tmp.dir({ unsafeCleanup: true });
+  console.log(`${prefix} Working directory: ${tempDir.path}`);
 
-  await git.checkoutRepoAtCommit(tempDir, source);
+  await git.checkoutRepoAtCommit(tempDir.path, source);
 
   const sourceDir =
-    source.path === undefined ? tempDir : path.join(tempDir, source.path);
+    source.path === undefined
+      ? tempDir.path
+      : path.join(tempDir.path, source.path);
   const remote = `ghcr.io/${GITHUB_REPOSITORY_OWNER.toLowerCase()}/${collection}/${publisher}/${slug}`;
 
   const publishWidget = async () => {
@@ -99,11 +100,11 @@ for (const it of publishPlan) {
     publishResult = await publishWidget();
   } else {
     console.warn(`::warning::${prefix} Plugin publishing not supported yet`);
-    await cleanupTempDir();
+    await tempDir.cleanup();
     continue;
   }
 
-  await cleanupTempDir();
+  await tempDir.cleanup();
 
   await prependApiVersionsList(API_DIR, collection, publisher, slug, {
     version: manifest.version,
