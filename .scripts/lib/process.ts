@@ -11,14 +11,7 @@ export function exec(
   return new Promise((resolve, reject) => {
     execFile(command, args, options, (err, stdout, stderr) => {
       if (err) {
-        const messageLines = [
-          "Failed to execute command",
-          `Error: ${err}`,
-          `Stdout:\n${stdout.toString("utf8")}`,
-          `Stderr:\n${stderr.toString("utf8")}`,
-        ];
-        const message = messageLines.join("\n----------\n");
-        reject(new Error(message, { cause: err }));
+        reject(err);
       } else {
         resolve({
           stdout: stdout.toString("utf8"),
