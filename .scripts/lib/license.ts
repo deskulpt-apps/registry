@@ -46,8 +46,7 @@ async function detectLicense(base: string, fileOrDir: string) {
 
 export async function validateLicense(
   spdx: string,
-  base: string,
-  files?: string[],
+  options: { base: string; files?: string[] },
 ) {
   if (LICENSEE_DETECT_SCRIPT === undefined) {
     return;
@@ -69,14 +68,14 @@ export async function validateLicense(
   }
 
   const detectedSet = new Set<string>();
-  if (files === undefined) {
-    const detectedLicenses = await detectLicense(base, ".");
+  if (options.files === undefined) {
+    const detectedLicenses = await detectLicense(options.base, ".");
     for (const license of detectedLicenses) {
       detectedSet.add(license);
     }
   } else {
-    for (const file of files) {
-      const detectedLicenses = await detectLicense(base, file);
+    for (const file of options.files) {
+      const detectedLicenses = await detectLicense(options.base, file);
       for (const license of detectedLicenses) {
         detectedSet.add(license);
       }
