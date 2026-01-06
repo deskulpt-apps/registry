@@ -47,11 +47,6 @@ jobs:
           ruby-version: "3.4"
           bundler-cache: true
 
-      - name: Install bundler dependencies
-        run: |
-          bundle install
-          bash -c "bundle exec licensee version"
-
       - name: Install oras
         uses: oras-project/setup-oras@v1
 

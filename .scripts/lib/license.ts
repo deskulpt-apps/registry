@@ -1,3 +1,4 @@
+import path from "node:path/posix";
 import spdxParse from "spdx-expression-parse";
 import spdxSatisfies from "spdx-satisfies";
 import { z } from "zod";
@@ -27,11 +28,12 @@ async function detectLicense(base: string, fileOrDir: string) {
     throw new Error("LICENSEE_DETECT_SCRIPT is not defined");
   }
 
-  const result = await exec(
-    "bash",
-    ["-c", LICENSEE_DETECT_SCRIPT, "_", fileOrDir],
-    { cwd: base },
-  );
+  const result = await exec("bash", [
+    "-c",
+    LICENSEE_DETECT_SCRIPT,
+    "_",
+    path.join(base, fileOrDir),
+  ]);
   const output = LICENSEE_DETECT_OUTPUT_SCHEMA.parse(JSON.parse(result.stdout));
 
   const licenses = output.matched_files
