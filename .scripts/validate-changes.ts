@@ -120,7 +120,7 @@ async function validateCollection(publisher: string, collection: Collection) {
       }
 
       try {
-        await validateLicense(manifest.license);
+        await validateLicense(sourceDir, manifest.license);
       } catch (error) {
         die(`${prefix} License validation failed: ${error}`);
       }

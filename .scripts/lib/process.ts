@@ -17,7 +17,7 @@ export function exec(
           `Stdout:\n${stdout.toString("utf8")}`,
           `Stderr:\n${stderr.toString("utf8")}`,
         ];
-        const message = messageLines.join("\n\n----------\n\n");
+        const message = messageLines.join("\n----------\n");
         reject(new Error(message, { cause: err }));
       } else {
         resolve({

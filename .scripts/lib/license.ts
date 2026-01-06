@@ -22,17 +22,16 @@ const LICENSEE_DETECT_OUTPUT_SCHEMA = z.object({
 
 const ACCEPTED_LICENSES = ["Apache-2.0", "BSD-3-Clause", "MIT"];
 
-async function detectLicense(fileOrDir: string) {
+async function detectLicense(base: string, fileOrDir: string) {
   if (LICENSEE_DETECT_SCRIPT === undefined) {
     throw new Error("LICENSEE_DETECT_SCRIPT is not defined");
   }
 
-  const result = await exec("bash", [
-    "-c",
-    LICENSEE_DETECT_SCRIPT,
-    "_",
-    fileOrDir,
-  ]);
+  const result = await exec(
+    "bash",
+    ["-c", LICENSEE_DETECT_SCRIPT, "_", fileOrDir],
+    { cwd: base },
+  );
   const output = LICENSEE_DETECT_OUTPUT_SCHEMA.parse(JSON.parse(result.stdout));
 
   const licenses = output.matched_files
@@ -45,7 +44,11 @@ async function detectLicense(fileOrDir: string) {
   return licenses;
 }
 
-export async function validateLicense(spdx: string, files?: string[]) {
+export async function validateLicense(
+  spdx: string,
+  base: string,
+  files?: string[],
+) {
   if (LICENSEE_DETECT_SCRIPT === undefined) {
     return;
   }
@@ -67,13 +70,13 @@ export async function validateLicense(spdx: string, files?: string[]) {
 
   const detectedSet = new Set<string>();
   if (files === undefined) {
-    const detectedLicenses = await detectLicense(".");
+    const detectedLicenses = await detectLicense(base, ".");
     for (const license of detectedLicenses) {
       detectedSet.add(license);
     }
   } else {
     for (const file of files) {
-      const detectedLicenses = await detectLicense(file);
+      const detectedLicenses = await detectLicense(base, file);
       for (const license of detectedLicenses) {
         detectedSet.add(license);
       }
