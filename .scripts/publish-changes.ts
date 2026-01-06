@@ -88,6 +88,7 @@ for (const it of publishPlan) {
     await writeApiWidgetDetails(API_DIR, publisher, slug, {
       publishedAt,
       digest: pushResult.digest,
+      source,
       manifest,
     });
     console.log(`${prefix} Details written`);
