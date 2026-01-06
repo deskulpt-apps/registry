@@ -50,7 +50,7 @@ jobs:
       - name: Install bundler dependencies
         run: |
           bundle install
-          bundle exec licensee version
+          bash -c "bundle exec licensee version"
 
       - name: Install oras
         uses: oras-project/setup-oras@v1
