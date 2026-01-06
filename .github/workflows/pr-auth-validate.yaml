@@ -73,7 +73,8 @@ jobs:
       - name: Validate changes
         shell: bash
         env:
-          LICENSEE_DETECT_SCRIPT: bundle exec licensee detect "$1" --json
+          LICENSEE_DETECT_SCRIPT: |
+            bundle exec licensee detect "$1" --json
         run: pnpm validate-changes
 
       - name: Display publish plan

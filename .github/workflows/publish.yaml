@@ -76,7 +76,8 @@ jobs:
         id: validate-changes
         shell: bash
         env:
-          LICENSEE_DETECT_SCRIPT: bundle exec licensee detect "$1" --json
+          LICENSEE_DETECT_SCRIPT: |
+            bundle exec licensee detect "$1" --json
         run: |
           pnpm validate-changes
           if [ -s "$PUBLISH_PLAN_PATH" ]; then
