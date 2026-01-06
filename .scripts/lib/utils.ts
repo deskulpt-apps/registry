@@ -1,6 +1,3 @@
-import { promisify } from "node:util";
-import tmp from "tmp";
-
 export const ALL_COLLECTIONS = ["widgets", "plugins"] as const;
 export type Collection = (typeof ALL_COLLECTIONS)[number];
 
@@ -20,14 +17,3 @@ export function pushOrReplace<T>(array: T[], index: number, entry: T) {
     array[index] = entry;
   }
 }
-
-export const tmpDir = promisify<
-  tmp.DirOptions,
-  { path: string; cleanup: () => Promise<void> }
->((options, callback) =>
-  tmp.dir(options, (error, path, cleanup) =>
-    error === null
-      ? callback(undefined, { path, cleanup: promisify(cleanup) })
-      : callback(error, undefined as any),
-  ),
-);
