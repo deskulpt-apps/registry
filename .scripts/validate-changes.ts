@@ -5,7 +5,6 @@ import * as git from "./lib/git.ts";
 import * as oras from "./lib/oras.ts";
 import * as tmp from "./lib/tmp.ts";
 import { ALL_COLLECTIONS, Collection, die } from "./lib/utils.ts";
-import { exec } from "./lib/process.ts";
 import {
   ManifestMetadata,
   PluginManifest,
@@ -19,7 +18,7 @@ import {
   parseSources,
   writePublishPlan,
 } from "./lib/schema.ts";
-import { extractLicenses, isLicenseAccepted } from "./lib/license.ts";
+import { validateLicense } from "./lib/license.ts";
 
 for (const varName of [
   "BASE_SHA",
@@ -36,7 +35,6 @@ const BASE_SHA = process.env["BASE_SHA"]!;
 const HEAD_SHA = process.env["HEAD_SHA"]!;
 const CHANGED_PUBLISHERS = process.env["CHANGED_PUBLISHERS"]!;
 const PUBLISH_PLAN_PATH = process.env["PUBLISH_PLAN_PATH"]!;
-const LICENSE_DETECTION_SCRIPT = process.env["LICENSE_DETECTION_SCRIPT"];
 
 const changedPublishers = CHANGED_PUBLISHERS.trim()
   .split(/\s+/)
@@ -121,30 +119,10 @@ async function validateCollection(publisher: string, collection: Collection) {
         );
       }
 
-      if (!isLicenseAccepted(manifest.license)) {
-        die(`${prefix} License "${manifest.license}" not accepted`);
-      }
-
-      if (LICENSE_DETECTION_SCRIPT !== undefined) {
-        const result = await exec("bash", [
-          "-c",
-          LICENSE_DETECTION_SCRIPT,
-          "_",
-          sourceDir,
-        ]);
-        const detectedLicenses = result.stdout
-          .trim()
-          .split(/\s+/)
-          .filter(Boolean);
-
-        const declaredLicenses = extractLicenses(manifest.license);
-        for (const license of declaredLicenses) {
-          if (!detectedLicenses.includes(license)) {
-            die(
-              `${prefix} License "${license}" declared but not detected in source; detected licenses are: ${detectedLicenses.join(", ")}`,
-            );
-          }
-        }
+      try {
+        await validateLicense(manifest.license);
+      } catch (error) {
+        die(`${prefix} License validation failed: ${error}`);
       }
 
       console.log(`${prefix} Metadata validation passed`);
