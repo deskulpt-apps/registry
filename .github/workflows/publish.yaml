@@ -9,7 +9,7 @@ env:
   GH_TOKEN: ${{ github.token }}
   HEAD_SHA: ${{ github.sha }}
   PUBLISH_PLAN_PATH: "publish-plan.json"
-  API_VERSION: 2025-12-30
+  API_VERSION: 2026-01-10
 
 concurrency:
   group: publish
@@ -20,21 +20,23 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       HAS_PUBLISH_PLAN: ${{ steps.validate-changes.outputs.HAS_PUBLISH_PLAN }}
+      NEEDS_PUBLISH_WIDGETS: ${{ steps.validate-changes.outputs.NEEDS_PUBLISH_WIDGETS }}
+      NEEDS_PUBLISH_PLUGINS: ${{ steps.validate-changes.outputs.NEEDS_PUBLISH_PLUGINS }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Read registry checkpoint
+      - name: Read API checkpoint
         shell: bash
         run: |
           set -euo pipefail
           API_DIR="$RUNNER_TEMP/api-wt"
-          git fetch origin api/$API_VERSION:refs/remotes/origin/api/$API_VERSION --depth=1
-          git worktree add "$API_DIR" origin/api/$API_VERSION
-          REGISTRY_CHECKPOINT=$(cat "$API_DIR/.checkpoint" | tr -d '\r\n')
-          BASE_SHA=$(git merge-base "$REGISTRY_CHECKPOINT" "$HEAD_SHA")
+          git fetch origin api:refs/remotes/origin/api --depth=1
+          git worktree add "$API_DIR" origin/api
+          API_CHECKPOINT=$(cat "$API_DIR/.checkpoint" | tr -d '\r\n')
+          BASE_SHA=$(git merge-base "$API_CHECKPOINT" "$HEAD_SHA")
           echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
           git worktree remove -f "$API_DIR" || true
 
@@ -79,11 +81,19 @@ jobs:
           LICENSEE_DETECT_SCRIPT: bundle exec licensee detect "$1" --json
         run: |
           pnpm validate-changes
+
+          HAS_PUBLISH_PLAN=0
+          NEEDS_PUBLISH_WIDGETS=0
+          NEEDS_PUBLISH_PLUGINS=0
           if [ -s "$PUBLISH_PLAN_PATH" ]; then
-            echo "HAS_PUBLISH_PLAN=1" >> $GITHUB_OUTPUT
-          else
-            echo "HAS_PUBLISH_PLAN=0" >> $GITHUB_OUTPUT
+            HAS_PUBLISH_PLAN=1
+            NEEDS_PUBLISH_WIDGETS=$(jq 'if any(.[]; .collection == "widgets") then 1 else 0 end' "$PUBLISH_PLAN_PATH")
+            NEEDS_PUBLISH_PLUGINS=$(jq 'if any(.[]; .collection == "plugins") then 1 else 0 end' "$PUBLISH_PLAN_PATH")
           fi
+
+          echo "HAS_PUBLISH_PLAN=$HAS_PUBLISH_PLAN" >> $GITHUB_OUTPUT
+          echo "NEEDS_PUBLISH_WIDGETS=$NEEDS_PUBLISH_WIDGETS" >> $GITHUB_OUTPUT
+          echo "NEEDS_PUBLISH_PLUGINS=$NEEDS_PUBLISH_PLUGINS" >> $GITHUB_OUTPUT
 
       - name: Upload publish plan
         if: ${{ steps.validate-changes.outputs.HAS_PUBLISH_PLAN == '1' }}
@@ -133,28 +143,38 @@ jobs:
           name: publish-plan
           path: .
 
-      - name: Prepare registry worktree
+      - name: Prepare API worktree
         shell: bash
         run: |
           set -euo pipefail
           API_DIR="$RUNNER_TEMP/api-wt"
-          git fetch origin api/$API_VERSION:refs/remotes/origin/api/$API_VERSION --depth=1
-          git worktree add "$API_DIR" origin/api/$API_VERSION
+          git fetch origin api:refs/remotes/origin/api --depth=1
+          git worktree add "$API_DIR" origin/api
           echo "API_DIR=$API_DIR" >> $GITHUB_ENV
 
-      - name: Publish to GHCR and update registry
+      - name: Publish widgets
         shell: bash
-        run: pnpm publish-changes
+        if: ${{ needs.validate-and-plan.outputs.NEEDS_PUBLISH_WIDGETS == '1' }}
+        run: pnpm publish-widgets
 
-      - name: Publish registry updates
+      - name: Commit API updates
         shell: bash
         run: |
           set -euo pipefail
           gh auth setup-git
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           cd "$API_DIR"
           echo "$HEAD_SHA" > .checkpoint
           git add -A
           git commit -m "publish: $HEAD_SHA"
-          git push origin HEAD:api/$API_VERSION
+
+          COMMIT_SHA=$(git rev-parse HEAD)
+          COMMIT_TIME=$(git show -s --format=%cI "$COMMIT_SHA")
+          HEADS_FILE="heads/$API_VERSION.json"
+          jq -n -c --arg sha "$COMMIT_SHA" --arg time "$COMMIT_TIME" '{updatedAt: $time, rev: $sha}' > "$HEADS_FILE"
+          git add "$HEADS_FILE"
+          git commit -m "publish: point $API_VERSION to $COMMIT_SHA"
+
+          git push origin HEAD:api

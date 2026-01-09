@@ -11,7 +11,7 @@
     "lint:check": "oxlint --max-warnings=0 .",
     "authz": "oxnode .scripts/authz.ts",
     "validate-changes": "oxnode .scripts/validate-changes.ts",
-    "publish-changes": "oxnode .scripts/publish-changes.ts"
+    "publish-widgets": "oxnode .scripts/publish-widgets.ts"
   },
   "dependencies": {
     "@actions/attest": "^2.1.0",
@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@oxc-node/cli": "^0.0.35",
+    "@oxc-node/core": "^0.0.35",
     "@tsconfig/node-lts": "^24.0.0",
     "@tsconfig/strictest": "^2.0.8",
     "@types/node": "^25.0.3",

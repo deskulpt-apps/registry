@@ -42,6 +42,9 @@ importers:
       '@oxc-node/cli':
         specifier: ^0.0.35
         version: 0.0.35
+      '@oxc-node/core':
+        specifier: ^0.0.35
+        version: 0.0.35
       '@tsconfig/node-lts':
         specifier: ^24.0.0
         version: 24.0.0

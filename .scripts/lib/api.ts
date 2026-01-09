@@ -1,111 +1,203 @@
 import path from "node:path/posix";
 import fs from "node:fs/promises";
 import { z } from "zod";
-import { PluginManifestSchema, WidgetManifestSchema } from "./manifest.ts";
+import {
+  PluginManifest,
+  PluginManifestSchema,
+  WidgetManifest,
+  WidgetManifestSchema,
+} from "./manifest.ts";
 import { Collection } from "./utils.ts";
-import { GitSourceSchema } from "./git.ts";
+import { GitSource, GitSourceSchema } from "./git.ts";
 
-const ApiIndexEntrySchema = z.object({
+const BaseIndexEntrySchema = z.object({
   publisher: z.string(),
   slug: z.string(),
   version: z.string(),
   name: z.string(),
   description: z.string(),
   authors: z.array(z.string()),
-  private: z.boolean().optional(),
   official: z.boolean().optional(),
+  hidden: z.boolean().optional(),
 });
 
-const ApiIndexSchema = z.object({
-  api: z.string(),
-  generatedAt: z.iso.datetime(),
-  widgets: z.array(ApiIndexEntrySchema),
-  plugins: z.array(ApiIndexEntrySchema),
+const WidgetsIndexSchema = z.object({
+  items: z.array(BaseIndexEntrySchema),
 });
 
-const ApiVersionsListSchema = z.array(
-  z.object({
-    version: z.string(),
-    publishedAt: z.iso.datetime(),
-  }),
-);
+const PluginsIndexSchema = z.object({
+  items: z.array(BaseIndexEntrySchema),
+});
 
-const ApiBaseDetailsSchema = z.object({
+const BaseMetaSchema = z.object({
   publishedAt: z.iso.datetime(),
   digest: z.string(),
   source: GitSourceSchema,
+  readme: z.enum(["markdown", "plain"]).optional(),
+  changelog: z.enum(["markdown", "plain"]).optional(),
 });
 
-const ApiWidgetDetailsSchema = ApiBaseDetailsSchema.extend({
+const WidgetMetaSchema = BaseMetaSchema.extend({
   manifest: WidgetManifestSchema,
 });
 
-const ApiPluginDetailsSchema = ApiBaseDetailsSchema.extend({
+const PluginMetaSchema = BaseMetaSchema.extend({
   manifest: PluginManifestSchema,
 });
 
-export type ApiIndex = z.infer<typeof ApiIndexSchema>;
-export type ApiVersionsList = z.infer<typeof ApiVersionsListSchema>;
-export type ApiWidgetDetails = z.infer<typeof ApiWidgetDetailsSchema>;
-export type ApiPluginDetails = z.infer<typeof ApiPluginDetailsSchema>;
+const VersionsListSchema = z.object({
+  items: z.array(
+    z.object({
+      version: z.string(),
+      publishedAt: z.iso.datetime(),
+      digest: z.string(),
+    }),
+  ),
+});
 
-export async function parseApiIndex(dir: string) {
-  const indexFile = path.join(dir, "index.json");
-  const content = await fs.readFile(indexFile, "utf-8");
-  const data = JSON.parse(content);
-  return ApiIndexSchema.parse(data);
+type BaseIndexEntry = z.infer<typeof BaseIndexEntrySchema>;
+
+type TypeMap = {
+  widgets: {
+    index: z.infer<typeof WidgetsIndexSchema>;
+    meta: z.infer<typeof WidgetMetaSchema>;
+    manifest: WidgetManifest;
+  };
+  plugins: {
+    index: z.infer<typeof PluginsIndexSchema>;
+    meta: z.infer<typeof PluginMetaSchema>;
+    manifest: PluginManifest;
+  };
+};
+
+abstract class BaseApi<C extends Collection> {
+  protected _now = new Date();
+  protected _index!: TypeMap[C]["index"];
+
+  constructor(
+    protected readonly _collection: C,
+    protected readonly _dir: string,
+  ) {}
+
+  protected abstract _setIndex(data: any): void;
+  protected abstract _updateIndex(i: number, base: BaseIndexEntry): void;
+
+  async init() {
+    const file = path.join(this._dir, `index.${this._collection}.json`);
+    const content = await fs.readFile(file, "utf-8");
+    const data = JSON.parse(content);
+    this._setIndex(data);
+  }
+
+  async flush() {
+    const file = path.join(this._dir, `index.${this._collection}.json`);
+    const content = JSON.stringify(this._index);
+
+    this._index.items.sort((a, b) => {
+      if (a.publisher !== b.publisher) {
+        return a.publisher.localeCompare(b.publisher);
+      }
+      return a.slug.localeCompare(b.slug);
+    });
+
+    await fs.writeFile(file, content, "utf-8");
+  }
+
+  async update({
+    publisher,
+    slug,
+    source,
+    manifest,
+    publishedAt,
+    digest,
+  }: {
+    publisher: string;
+    slug: string;
+    source: GitSource;
+    manifest: TypeMap[C]["manifest"];
+    publishedAt: string;
+    digest: string;
+  }) {
+    const dir = path.join(this._dir, this._collection, publisher, slug);
+    await fs.mkdir(dir, { recursive: true });
+
+    {
+      const file = path.join(dir, "meta.json");
+      const meta: TypeMap[C]["meta"] = {
+        publishedAt,
+        digest,
+        source,
+        manifest,
+      };
+      const content = JSON.stringify(meta);
+      await fs.writeFile(file, content, "utf-8");
+    }
+
+    {
+      const file = path.join(dir, "versions.json");
+      const content = await fs.readFile(file, "utf-8");
+      const data = JSON.parse(content);
+      const versions = VersionsListSchema.parse(data);
+      versions.items.unshift({
+        version: manifest.version,
+        publishedAt,
+        digest,
+      });
+      const newContent = JSON.stringify(versions);
+      await fs.writeFile(file, newContent, "utf-8");
+    }
+
+    const i = this._index.items.findIndex(
+      (e) => e.publisher === publisher && e.slug === slug,
+    );
+
+    this._updateIndex(i, {
+      publisher,
+      slug,
+      version: manifest.version,
+      name: manifest.name,
+      description: manifest.description,
+      authors: manifest.authors.map((author) =>
+        typeof author === "string" ? author : author.name,
+      ),
+      official: publisher === "deskulpt" ? true : undefined,
+      hidden: publisher === "deskulpt-test" ? true : undefined,
+    });
+  }
 }
 
-export async function writeApiIndex(dir: string, index: ApiIndex) {
-  const indexFile = path.join(dir, "index.json");
-  const content = JSON.stringify(index);
-  await fs.writeFile(indexFile, content, "utf-8");
+export class WidgetsApi extends BaseApi<"widgets"> {
+  constructor(dir: string) {
+    super("widgets", dir);
+  }
+
+  _setIndex(data: any) {
+    this._index = WidgetsIndexSchema.parse(data);
+  }
+
+  _updateIndex(i: number, base: BaseIndexEntry) {
+    if (i === -1) {
+      this._index.items.push(base);
+    } else {
+      this._index.items[i] = base;
+    }
+  }
 }
 
-export async function prependApiVersionsList(
-  dir: string,
-  collection: Collection,
-  publisher: string,
-  slug: string,
-  versionInfo: ApiVersionsList[number],
-) {
-  const baseDir = path.join(dir, collection, publisher, slug);
-  await fs.mkdir(baseDir, { recursive: true });
+export class PluginsApi extends BaseApi<"plugins"> {
+  constructor(dir: string) {
+    super("plugins", dir);
+  }
 
-  const versionsListFile = path.join(baseDir, "versions.json");
-  const content = await fs.readFile(versionsListFile, "utf-8");
-  const data = JSON.parse(content);
-  const versionsList = ApiVersionsListSchema.parse(data);
+  _setIndex(data: any) {
+    this._index = PluginsIndexSchema.parse(data);
+  }
 
-  versionsList.unshift(versionInfo);
-  const newContent = JSON.stringify(versionsList);
-  await fs.writeFile(versionsListFile, newContent, "utf-8");
-}
-
-export async function writeApiWidgetDetails(
-  dir: string,
-  publisher: string,
-  slug: string,
-  details: ApiWidgetDetails,
-) {
-  const baseDir = path.join(dir, "widgets", publisher, slug);
-  await fs.mkdir(baseDir, { recursive: true });
-
-  const detailsFile = path.join(baseDir, `${details.manifest.version}.json`);
-  const content = JSON.stringify(details);
-  await fs.writeFile(detailsFile, content, "utf-8");
-}
-
-export async function writeApiPluginDetails(
-  dir: string,
-  publisher: string,
-  slug: string,
-  details: ApiPluginDetails,
-) {
-  const baseDir = path.join(dir, "plugins", publisher, slug);
-  await fs.mkdir(baseDir, { recursive: true });
-
-  const detailsFile = path.join(baseDir, `${details.manifest.version}.json`);
-  const content = JSON.stringify(details);
-  await fs.writeFile(detailsFile, content, "utf-8");
+  _updateIndex(i: number, base: BaseIndexEntry) {
+    if (i === -1) {
+      this._index.items.push(base);
+    } else {
+      this._index.items[i] = base;
+    }
+  }
 }

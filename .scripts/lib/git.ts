@@ -23,6 +23,15 @@ export async function showFileAtCommit(path: string, commit: string) {
   return result.stdout;
 }
 
+export async function getCommitInfo(commit: string) {
+  const result = await exec("git", ["show", "-s", "--format=%cI%n%H", commit]);
+  const [time, sha] = result.stdout.trim().split("\n");
+  if (!time || !sha) {
+    throw new Error(`Failed to get commit info for ${commit}`);
+  }
+  return { time: new Date(time).toISOString(), sha };
+}
+
 export async function checkoutRepoAtCommit(dest: string, source: GitSource) {
   await exec("git", ["init", dest], {});
   await exec("git", ["-C", dest, "remote", "add", "origin", source.repo]);
