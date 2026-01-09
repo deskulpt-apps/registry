@@ -9,11 +9,3 @@ export function die(message: string): never {
   console.error(`::error::${message}`);
   process.exit(1);
 }
-
-export function pushOrReplace<T>(array: T[], index: number, entry: T) {
-  if (index === -1) {
-    array.push(entry);
-  } else {
-    array[index] = entry;
-  }
-}

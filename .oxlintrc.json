@@ -9,6 +9,7 @@
     "pedantic": "warn"
   },
   "rules": {
+    "max-classes-per-file": "off",
     "max-dependencies": "off",
     "max-depth": "off",
     "max-lines-per-function": "off",
