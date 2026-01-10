@@ -5,7 +5,8 @@
   ],
   "compilerOptions": {
     "noEmit": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "exactOptionalPropertyTypes": false
   },
   "include": [".scripts/**/*.ts"]
 }

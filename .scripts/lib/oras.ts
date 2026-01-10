@@ -25,88 +25,93 @@ const OrasPushOutputSchema = z.object({
   referenceAsTags: z.array(z.string()),
 });
 
-export async function pushWidget({
-  dir,
-  source,
-  manifest,
-  remote,
-}: {
-  dir: string;
-  source: GitSource;
-  manifest: WidgetManifest;
-  remote?: string;
-}) {
-  const randomId = Math.random().toString(36).slice(2);
-  const archiveFile = `archive-${randomId}.tar.gz`;
-  const layoutRef = `dist-layout-${randomId}:v${manifest.version}`;
+export class WidgetBundler {
+  private _layoutRef: string | null = null;
 
-  // ORAS hates absolute paths so we have to finally keep the archive in a
-  // relative path, but if we create the archive in the target directory the
-  // archive will include itself, so we create it at a temp location first then
-  // copy it over
-  const tempFile = await tmp.file({ postfix: ".tar.gz" });
-  await tar.c(
-    {
-      cwd: dir,
-      file: tempFile.path,
-      gzip: true,
-      follow: true, // Resolve symlinks to avoid security issues
-      portable: true, // Ensure consistent file metadata
-      noMtime: true, // No timestamp for deterministic builds
-    },
-    ["."],
-  );
-  await fs.copyFile(tempFile.path, path.join(dir, archiveFile));
-  await tempFile.cleanup();
+  constructor(
+    private _dir: string,
+    private _source: GitSource,
+    private _manifest: WidgetManifest,
+  ) {}
 
-  // https://specs.opencontainers.org/image-spec/annotations/#pre-defined-annotation-keys
-  const standardAnnotations = {
-    created: undefined, // This will be filled by oras
-    authors: JSON.stringify(manifest.authors),
-    url: manifest.homepage,
-    source: source.repo,
-    version: manifest.version,
-    revision: source.commit,
-    vendor: "Deskulpt",
-    licenses: manifest.license,
-    title: manifest.name,
-    description: manifest.description,
-  };
+  async bundle() {
+    const randomId = Math.random().toString(36).slice(2);
+    const archiveFile = `archive-${randomId}.tar.gz`;
+    this._layoutRef = `dist-layout-${randomId}:v${this._manifest.version}`;
 
-  const pushArgs = [
-    "push",
-    "--oci-layout",
-    "--artifact-type",
-    "application/vnd.deskulpt.widget.v1",
-  ];
+    // ORAS hates absolute paths so we have to finally keep the archive in a
+    // relative path, but if we create the archive in the target directory the
+    // archive will include itself, so we create it at a temp location first then
+    // copy it over
+    const tempFile = await tmp.file({ postfix: ".tar.gz" });
+    await tar.c(
+      {
+        cwd: this._dir,
+        file: tempFile.path,
+        gzip: true,
+        follow: true, // Resolve symlinks to avoid security issues
+        portable: true, // Ensure consistent file metadata
+        noMtime: true, // No timestamp for deterministic builds
+      },
+      ["."],
+    );
+    await fs.copyFile(tempFile.path, path.join(this._dir, archiveFile));
+    await tempFile.cleanup();
 
-  for (const [key, value] of Object.entries(standardAnnotations)) {
-    if (value !== undefined) {
-      pushArgs.push("--annotation", `org.opencontainers.image.${key}=${value}`);
+    // https://specs.opencontainers.org/image-spec/annotations/#pre-defined-annotation-keys
+    const standardAnnotations = {
+      created: undefined, // This will be filled by oras
+      authors: JSON.stringify(this._manifest.authors),
+      url: this._manifest.homepage,
+      source: this._source.repo,
+      version: this._manifest.version,
+      revision: this._source.commit,
+      vendor: "Deskulpt",
+      licenses: this._manifest.license,
+      title: this._manifest.name,
+      description: this._manifest.description,
+    };
+
+    const pushArgs = [
+      "push",
+      "--oci-layout",
+      "--artifact-type",
+      "application/vnd.deskulpt.widget.v1",
+    ];
+
+    for (const [key, value] of Object.entries(standardAnnotations)) {
+      if (value !== undefined) {
+        pushArgs.push(
+          "--annotation",
+          `org.opencontainers.image.${key}=${value}`,
+        );
+      }
     }
+
+    pushArgs.push(
+      this._layoutRef,
+      `${archiveFile}:application/vnd.oci.image.layer.v1.tar+gzip`,
+      "--no-tty",
+      "--format",
+      "json",
+    );
+
+    const pushResult = await exec(ORAS_CLI, pushArgs, { cwd: this._dir });
+    return OrasPushOutputSchema.parse(JSON.parse(pushResult.stdout));
   }
 
-  pushArgs.push(
-    layoutRef,
-    `${archiveFile}:application/vnd.oci.image.layer.v1.tar+gzip`,
-    "--no-tty",
-    "--format",
-    "json",
-  );
+  async push(remote: string) {
+    if (this._layoutRef === null) {
+      throw new Error("No layout to push; please run bundle() first");
+    }
 
-  const pushResult = await exec(ORAS_CLI, pushArgs, { cwd: dir });
-  const pushOutput = OrasPushOutputSchema.parse(JSON.parse(pushResult.stdout));
-
-  if (remote !== undefined) {
     const cpArgs = [
       "cp",
       "--from-oci-layout",
-      layoutRef,
-      `${remote}:v${manifest.version}`,
+      this._layoutRef,
+      `${remote}:v${this._manifest.version}`,
       "--no-tty",
     ];
-    await exec(ORAS_CLI, cpArgs, { cwd: dir });
+    await exec(ORAS_CLI, cpArgs, { cwd: this._dir });
   }
-
-  return pushOutput;
 }
