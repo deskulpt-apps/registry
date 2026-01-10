@@ -9,6 +9,7 @@ import {
 } from "./manifest.ts";
 import { Collection } from "./utils.ts";
 import { GitSource, GitSourceSchema } from "./git.ts";
+import { copyChangelog, copyReadme } from "./special-files.ts";
 
 const BaseIndexEntrySchema = z.object({
   publisher: z.string(),
@@ -33,8 +34,8 @@ const BaseMetaSchema = z.object({
   publishedAt: z.iso.datetime(),
   digest: z.string(),
   source: GitSourceSchema,
-  readme: z.enum(["markdown", "plain"]).optional(),
-  changelog: z.enum(["markdown", "plain"]).optional(),
+  readme: z.boolean().optional(),
+  changelog: z.boolean().optional(),
 });
 
 const WidgetMetaSchema = BaseMetaSchema.extend({
@@ -107,6 +108,7 @@ abstract class BaseApi<C extends Collection> {
     publisher,
     slug,
     source,
+    sourceDir,
     manifest,
     publishedAt,
     digest,
@@ -114,12 +116,29 @@ abstract class BaseApi<C extends Collection> {
     publisher: string;
     slug: string;
     source: GitSource;
+    sourceDir: string;
     manifest: TypeMap[C]["manifest"];
     publishedAt: string;
     digest: string;
   }) {
     const dir = path.join(this._dir, this._collection, publisher, slug);
     await fs.mkdir(dir, { recursive: true });
+
+    const filesDir = path.join(dir, "files");
+    await fs.rm(filesDir, { recursive: true, force: true });
+    await fs.mkdir(filesDir, { recursive: true });
+
+    const readmeCopied = await copyReadme(
+      sourceDir,
+      path.join(filesDir, "readme"),
+      manifest.readme,
+    );
+
+    const changelogCopied = await copyChangelog(
+      sourceDir,
+      path.join(filesDir, "changelog"),
+      manifest.changelog,
+    );
 
     {
       const file = path.join(dir, "meta.json");
@@ -128,6 +147,8 @@ abstract class BaseApi<C extends Collection> {
         digest,
         source,
         manifest,
+        readme: readmeCopied || undefined,
+        changelog: changelogCopied || undefined,
       };
       const content = JSON.stringify(meta);
       await fs.writeFile(file, content, "utf-8");
@@ -171,11 +192,11 @@ export class WidgetsApi extends BaseApi<"widgets"> {
     super("widgets", dir);
   }
 
-  _setIndex(data: any) {
+  protected _setIndex(data: any) {
     this._index = WidgetsIndexSchema.parse(data);
   }
 
-  _updateIndex(i: number, base: BaseIndexEntry) {
+  protected _updateIndex(i: number, base: BaseIndexEntry) {
     if (i === -1) {
       this._index.items.push(base);
     } else {
@@ -189,11 +210,11 @@ export class PluginsApi extends BaseApi<"plugins"> {
     super("plugins", dir);
   }
 
-  _setIndex(data: any) {
+  protected _setIndex(data: any) {
     this._index = PluginsIndexSchema.parse(data);
   }
 
-  _updateIndex(i: number, base: BaseIndexEntry) {
+  protected _updateIndex(i: number, base: BaseIndexEntry) {
     if (i === -1) {
       this._index.items.push(base);
     } else {

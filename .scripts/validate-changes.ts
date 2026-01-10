@@ -129,13 +129,11 @@ async function validateCollection(publisher: string, collection: Collection) {
     };
 
     const validateWidgetManifest = async (manifest: WidgetManifest) => {
-      console.log(`::group::${prefix} Packaging widget (dry run)...`);
-      const pushResult = await oras.pushWidget({
-        dir: sourceDir,
-        source,
-        manifest,
-      });
-      console.log(pushResult);
+      const bundler = new oras.WidgetBundler(sourceDir, source, manifest);
+
+      console.log(`::group::${prefix} Bundling widget...`);
+      const bundleResult = await bundler.bundle();
+      console.log(bundleResult);
       console.log(`::endgroup::`);
 
       console.log(`${prefix} Widget manifest validation passed`);

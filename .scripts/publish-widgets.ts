@@ -46,32 +46,16 @@ for (const it of publishPlan) {
       : path.join(tempDir.path, source.path);
   const remote = `ghcr.io/${GITHUB_REPOSITORY_OWNER.toLowerCase()}/widgets/${publisher}/${slug}`;
 
-  console.log(`::group::${prefix} Publishing...`);
-  const pushResult = await oras.pushWidget({
-    dir: sourceDir,
-    source,
-    manifest,
-    remote,
-  });
-  console.log(pushResult);
+  const bundler = new oras.WidgetBundler(sourceDir, source, manifest);
+
+  console.log(`::group::${prefix} Bundling...`);
+  const bundleResult = await bundler.bundle();
+  console.log(bundleResult);
   console.log("::endgroup::");
-  console.log(`::notice::${prefix} Published: https://${remote}`);
-
-  await tempDir.cleanup();
-
-  if (process.env["SKIP_ATTESTATION"] !== "1") {
-    const attestationId = await github.attestProvenance({
-      name: remote,
-      digest: pushResult.digest,
-    });
-    console.log(
-      `::notice::${prefix} Attested: https://github.com/${GITHUB_REPOSITORY}/attestations/${attestationId}`,
-    );
-  }
 
   let publishedAt = new Date().toISOString();
   const createdAt =
-    pushResult.annotations?.["org.opencontainers.image.created"];
+    bundleResult.annotations?.["org.opencontainers.image.created"];
   if (createdAt !== undefined) {
     publishedAt = createdAt;
   }
@@ -80,10 +64,26 @@ for (const it of publishPlan) {
     publisher,
     slug,
     source,
+    sourceDir,
     manifest,
     publishedAt,
-    digest: pushResult.digest,
+    digest: bundleResult.digest,
   });
+
+  await bundler.push(remote);
+  console.log(`::notice::${prefix} Published: https://${remote}`);
+
+  await tempDir.cleanup();
+
+  if (process.env["SKIP_ATTESTATION"] !== "1") {
+    const attestationId = await github.attestProvenance({
+      name: remote,
+      digest: bundleResult.digest,
+    });
+    console.log(
+      `::notice::${prefix} Attested: https://github.com/${GITHUB_REPOSITORY}/attestations/${attestationId}`,
+    );
+  }
 }
 
 await api.flush();

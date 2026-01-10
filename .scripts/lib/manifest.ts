@@ -20,6 +20,8 @@ const ManifestMetadataSchema = z.object({
   license: z.string(),
   description: z.string().min(1).max(160),
   homepage: z.url(),
+  readme: z.string().or(z.boolean()).optional(),
+  changelog: z.string().or(z.boolean()).optional(),
 });
 
 export const WidgetManifestSchema = ManifestMetadataSchema.extend({});
