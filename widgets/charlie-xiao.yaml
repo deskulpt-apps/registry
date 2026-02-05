@@ -3,3 +3,9 @@ example-digital-clock:
   repo: https://github.com/Charlie-XIAO/deskulpt-widgets.git
   commit: eac361dff70da93d573cd28f041aa15ca5d8a123
   path: example-digital-clock
+
+example-sysinfo:
+  version: 0.1.0-alpha.0
+  repo: https://github.com/Charlie-XIAO/deskulpt-widgets.git
+  commit: 03e5161df15d242a57baa5e2d0238d86feddc19a
+  path: example-sysinfo
